@@ -5,8 +5,12 @@ description = "A modular, voice-enabled smart speaker written in Python."
 readme = "README.md"
 requires-python = ">=3.11,<3.12"
 dependencies = [
+    "faster-whisper>=1.2.1",
+    "numpy>=2.4.6",
     "ollama>=0.6.2",
+    "openai>=2.52.0",
     "piper-tts>=1.6.0",
+    "sounddevice>=0.5.5",
 ]
 
 [dependency-groups]

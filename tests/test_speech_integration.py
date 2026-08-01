@@ -5,6 +5,7 @@ import pytest
 from ai.stub import StubChatbotProvider
 from config.settings import Settings
 from main import build_application, deliver_response
+from speech.manager import SpeechManager
 from speech.silent import SilentSpeechProvider
 
 
@@ -24,21 +25,25 @@ async def test_application_accepts_injected_speech_provider() -> None:
     )
 
     assert context.speech_provider is speech_provider
+    assert context.speech_manager.provider is speech_provider
 
 
 @pytest.mark.asyncio
-async def test_deliver_response_prints_and_speaks(
+async def test_deliver_response_prints_and_starts_speech(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    """Responses should be sent to console and speech output."""
+    """Responses should be printed and submitted for speech."""
 
     speech_provider = SilentSpeechProvider()
+    speech_manager = SpeechManager(provider=speech_provider)
 
     await deliver_response(
         assistant_name="Balanspeaker",
         response_text="The timer is set.",
-        speech_provider=speech_provider,
+        speech_manager=speech_manager,
     )
+
+    await speech_manager.wait_until_idle()
 
     captured = capsys.readouterr()
 

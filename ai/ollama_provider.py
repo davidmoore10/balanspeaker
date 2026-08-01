@@ -14,7 +14,6 @@ from ai.provider import ChatbotProvider
 from domains.conversation.message import ConversationMessage
 from domains.conversation.role import ConversationRole
 
-
 DEFAULT_SYSTEM_PROMPT = """
 You are Balanspeaker, a concise and helpful home voice assistant.
 
@@ -124,6 +123,8 @@ class OllamaChatbotProvider(ChatbotProvider):
                 messages=messages,
                 options={
                     "temperature": self._temperature,
+                    "num_predict": 120,
+                    "num_ctx": 2048,
                 },
                 keep_alive=self._keep_alive,
             )

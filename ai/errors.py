@@ -11,3 +11,7 @@ class ChatbotProviderUnavailableError(ChatbotProviderError):
 
 class ChatbotProviderResponseError(ChatbotProviderError):
     """Raised when a provider returns an unusable response."""
+
+
+class ChatbotAuthenticationError(ChatbotProviderError):
+    """Raised when provider credentials are missing or invalid."""

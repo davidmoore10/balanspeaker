@@ -24,7 +24,9 @@ def test_default_speech_settings(
     settings = load_settings()
 
     assert settings.speech_provider == "piper"
-    assert settings.piper_voice_path == Path("models_data/piper/en_GB-alan-medium.onnx")
+    assert settings.piper_voice_path == Path(
+        "models_data/piper/en_GB-jenny_dioco-medium.onnx"
+    )
 
 
 def test_speech_settings_read_environment(

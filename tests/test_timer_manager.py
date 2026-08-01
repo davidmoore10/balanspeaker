@@ -11,7 +11,6 @@ from domains.timer.manager import TimerManager, TimerNotFoundError
 from domains.timer.status import TimerStatus
 from models.event import EventType
 
-
 TIMER_ID_1 = UUID("00000000-0000-0000-0000-000000000001")
 TIMER_ID_2 = UUID("00000000-0000-0000-0000-000000000002")
 

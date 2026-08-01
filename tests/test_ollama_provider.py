@@ -164,7 +164,11 @@ async def test_provider_sends_system_and_history_messages() -> None:
         "content": "What about parsley?",
     }
     assert call["model"] == "llama3.2:3b"
-    assert call["options"] == {"temperature": 0.2}
+    assert call["options"] == {
+        "temperature": 0.2,
+        "num_predict": 120,
+        "num_ctx": 2048,
+    }
     assert call["keep_alive"] == "10m"
 
 

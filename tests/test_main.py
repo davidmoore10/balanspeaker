@@ -8,7 +8,6 @@ from ai.stub import StubChatbotProvider
 from main import build_application
 from speech.silent import SilentSpeechProvider
 
-
 TEST_TIMER_ID = UUID("00000000-0000-0000-0000-000000000001")
 
 

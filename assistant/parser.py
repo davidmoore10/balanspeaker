@@ -16,7 +16,7 @@ class CommandParser(ABC):
 
 
 class RuleBasedCommandParser(CommandParser):
-    """Parse device commands and route other text to conversation."""
+    """Parse deterministic commands and conversational input."""
 
     _GREETINGS = {
         "hello",
@@ -34,6 +34,41 @@ class RuleBasedCommandParser(CommandParser):
         "tell me the time",
         "current time",
         "time",
+    }
+
+    _ENABLE_AI_REQUESTS = {
+        "engage ai",
+        "enable ai",
+        "enable ai mode",
+        "start ai mode",
+        "enter ai mode",
+        "let's talk",
+        "lets talk",
+        "i have a question",
+        "can i ask you something",
+    }
+
+    _DISABLE_AI_REQUESTS = {
+        "disengage ai",
+        "disable ai",
+        "disable ai mode",
+        "exit ai mode",
+        "leave ai mode",
+        "end conversation",
+        "finish conversation",
+        "back to command mode",
+        "return to command mode",
+    }
+
+    _STOP_SPEECH_REQUESTS = {
+        "stop speaking",
+        "stop talking",
+        "be quiet",
+        "quiet",
+        "that's enough",
+        "thats enough",
+        "enough",
+        "shut up",
     }
 
     _TIMER_LIST_REQUESTS = {
@@ -123,6 +158,24 @@ class RuleBasedCommandParser(CommandParser):
 
         original_text = user_text
         normalized_text = self._normalize(user_text)
+
+        if normalized_text in self._STOP_SPEECH_REQUESTS:
+            return Command(
+                type=CommandType.STOP_SPEECH,
+                original_text=original_text,
+            )
+
+        if normalized_text in self._ENABLE_AI_REQUESTS:
+            return Command(
+                type=CommandType.ENABLE_AI_MODE,
+                original_text=original_text,
+            )
+
+        if normalized_text in self._DISABLE_AI_REQUESTS:
+            return Command(
+                type=CommandType.DISABLE_AI_MODE,
+                original_text=original_text,
+            )
 
         if normalized_text in self._GREETINGS:
             return Command(
@@ -301,7 +354,6 @@ class RuleBasedCommandParser(CommandParser):
         """Parse a timer cancellation request."""
 
         match = self._CANCEL_TIMER_PATTERN.search(normalized_text)
-
         parameters: dict[str, object] = {}
 
         if match is not None:
@@ -319,8 +371,11 @@ class RuleBasedCommandParser(CommandParser):
             original_text=original_text,
         )
 
-    def _extract_timer_name(self, normalized_text: str) -> str | None:
-        """Extract an optional name from a timer creation request."""
+    def _extract_timer_name(
+        self,
+        normalized_text: str,
+    ) -> str | None:
+        """Extract an optional timer name."""
 
         match = self._NAMED_TIMER_PATTERN.search(normalized_text)
 
@@ -329,19 +384,22 @@ class RuleBasedCommandParser(CommandParser):
 
         name = match.group("name").strip()
 
-        if not name:
-            return None
+        return name or None
 
-        return name
-
-    def _looks_like_timer_request(self, normalized_text: str) -> bool:
-        """Return whether the text appears to be a timer request."""
+    def _looks_like_timer_request(
+        self,
+        normalized_text: str,
+    ) -> bool:
+        """Return whether the text appears to request a timer."""
 
         words = set(normalized_text.split())
         return bool(words & self._TIMER_KEYWORDS)
 
-    def _is_cancel_timer_request(self, normalized_text: str) -> bool:
-        """Return whether the user is asking to cancel a timer."""
+    def _is_cancel_timer_request(
+        self,
+        normalized_text: str,
+    ) -> bool:
+        """Return whether the text requests timer cancellation."""
 
         return self._CANCEL_TIMER_PATTERN.search(normalized_text) is not None
 
@@ -351,13 +409,28 @@ class RuleBasedCommandParser(CommandParser):
 
         normalized_unit = unit.lower()
 
-        if normalized_unit in {"second", "seconds", "sec", "secs"}:
+        if normalized_unit in {
+            "second",
+            "seconds",
+            "sec",
+            "secs",
+        }:
             return 1
 
-        if normalized_unit in {"minute", "minutes", "min", "mins"}:
+        if normalized_unit in {
+            "minute",
+            "minutes",
+            "min",
+            "mins",
+        }:
             return 60
 
-        if normalized_unit in {"hour", "hours", "hr", "hrs"}:
+        if normalized_unit in {
+            "hour",
+            "hours",
+            "hr",
+            "hrs",
+        }:
             return 3600
 
         return None

@@ -24,8 +24,12 @@ class CommandType(StrEnum):
     RESUME_MEDIA = "resume_media"
     STOP_MEDIA = "stop_media"
 
-    CHAT = "chat"
+    ENABLE_AI_MODE = "enable_ai_mode"
+    DISABLE_AI_MODE = "disable_ai_mode"
 
+    STOP_SPEECH = "stop_speech"
+
+    CHAT = "chat"
     UNKNOWN = "unknown"
 
 

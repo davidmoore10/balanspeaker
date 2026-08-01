@@ -63,7 +63,9 @@ class FailingTimeService(Service):
 
 
 def build_test_assistant(
+    *,
     include_time_service: bool = False,
+    enable_ai_mode: bool = False,
 ) -> Assistant:
     """Build an assistant configured for tests."""
 
@@ -73,10 +75,15 @@ def build_test_assistant(
     if include_time_service:
         registry.register(FailingTimeService())
 
+    context = build_test_context()
+
+    if enable_ai_mode:
+        context.interaction_manager.enable_ai_mode()
+
     return Assistant(
         registry=registry,
         parser=RuleBasedCommandParser(),
-        context=build_test_context(),
+        context=context,
         name="Balanspeaker",
     )
 
@@ -96,7 +103,10 @@ def test_default_assistant_name() -> None:
 def test_empty_assistant_name_is_rejected() -> None:
     """Blank assistant names should be rejected."""
 
-    with pytest.raises(ValueError, match="Assistant name cannot be empty"):
+    with pytest.raises(
+        ValueError,
+        match="Assistant name cannot be empty",
+    ):
         Assistant(
             registry=ServiceRegistry(),
             parser=RuleBasedCommandParser(),
@@ -112,7 +122,7 @@ def test_start_message_contains_assistant_name() -> None:
 
     response = assistant.start_message()
 
-    assert response.text == "Balanspeaker is ready. Type 'exit' to quit."
+    assert response.text == ("Balanspeaker is ready. Type 'exit' to quit.")
 
 
 @pytest.mark.asyncio
@@ -128,7 +138,7 @@ async def test_handle_text_executes_matching_command() -> None:
 
 @pytest.mark.asyncio
 async def test_handle_empty_text_returns_prompt() -> None:
-    """Blank input should produce a prompt rather than a service call."""
+    """Blank input should produce a prompt."""
 
     assistant = build_test_assistant()
 
@@ -138,25 +148,40 @@ async def test_handle_empty_text_returns_prompt() -> None:
 
 
 @pytest.mark.asyncio
-async def test_chat_without_registered_service_is_unavailable() -> None:
-    """Chat requests require a registered chatbot service."""
+async def test_chat_is_blocked_in_command_mode() -> None:
+    """Chat must not be invoked accidentally in command mode."""
 
     assistant = build_test_assistant()
 
     response = await assistant.handle_text("How should I store basil?")
 
-    assert response.text == "That capability is not currently available."
+    assert response.text == (
+        "I didn't recognise that command. Say 'engage AI' to start a conversation."
+    )
+
+
+@pytest.mark.asyncio
+async def test_chat_without_registered_service_is_unavailable() -> None:
+    """AI-mode chat requires a registered chatbot service."""
+
+    assistant = build_test_assistant(
+        enable_ai_mode=True,
+    )
+
+    response = await assistant.handle_text("How should I store basil?")
+
+    assert response.text == ("That capability is not currently available.")
 
 
 @pytest.mark.asyncio
 async def test_known_command_without_service_returns_unavailable() -> None:
-    """A parsed command without a registered service should be unavailable."""
+    """A parsed command without a service should be unavailable."""
 
     assistant = build_test_assistant()
 
     response = await assistant.handle_text("what time is it")
 
-    assert response.text == "That capability is not currently available."
+    assert response.text == ("That capability is not currently available.")
 
 
 @pytest.mark.asyncio
@@ -172,21 +197,21 @@ async def test_service_failure_returns_controlled_error() -> None:
 
 @pytest.mark.asyncio
 async def test_timer_without_registered_service_is_unavailable() -> None:
-    """A valid timer command should be unavailable before service registration."""
+    """A timer command requires a registered timer service."""
 
     assistant = build_test_assistant()
 
     response = await assistant.handle_text("timer 5")
 
-    assert response.text == "That capability is not currently available."
+    assert response.text == ("That capability is not currently available.")
 
 
 @pytest.mark.asyncio
 async def test_timer_without_duration_returns_parser_error() -> None:
-    """An incomplete timer command should return a parser validation error."""
+    """An incomplete timer command should return a parser error."""
 
     assistant = build_test_assistant()
 
     response = await assistant.handle_text("set a timer")
 
-    assert response.text == "Please specify how long the timer should run."
+    assert response.text == ("Please specify how long the timer should run.")

@@ -12,7 +12,6 @@ from domains.audio.state import AlarmPlaybackState, MediaPlaybackState
 from models.event import Event, EventType
 from tests.helpers import build_test_context
 
-
 TIMER_ID = UUID("00000000-0000-0000-0000-000000000001")
 
 

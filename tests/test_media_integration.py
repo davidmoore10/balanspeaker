@@ -11,7 +11,6 @@ from domains.audio.state import MediaPlaybackState
 from main import build_application
 from models.event import Event, EventType
 
-
 TIMER_ID = UUID("00000000-0000-0000-0000-000000000001")
 
 

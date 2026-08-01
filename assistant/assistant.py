@@ -1,5 +1,7 @@
 """Core assistant application."""
 
+import traceback
+
 from assistant.context import ApplicationContext
 from assistant.parser import CommandParser
 from assistant.registry import ServiceRegistry
@@ -36,10 +38,13 @@ class Assistant:
     def start_message(self) -> AssistantResponse:
         """Return the application start message."""
 
-        return AssistantResponse(text=f"{self._name} is ready. Type 'exit' to quit.")
+        return AssistantResponse(text=(f"{self._name} is ready. Type 'exit' to quit."))
 
-    async def handle_text(self, user_text: str) -> AssistantResponse:
-        """Parse user text and execute the resulting command."""
+    async def handle_text(
+        self,
+        user_text: str,
+    ) -> AssistantResponse:
+        """Parse and execute one user request."""
 
         cleaned_text = user_text.strip()
 
@@ -51,13 +56,26 @@ class Assistant:
         if command.error is not None:
             return AssistantResponse(text=command.error.message)
 
+        if (
+            command.type == CommandType.CHAT
+            and not self._context.interaction_manager.ai_mode_enabled
+        ):
+            return AssistantResponse(
+                text=(
+                    "I didn't recognise that command. "
+                    "Say 'engage AI' to start a conversation."
+                )
+            )
+
         if command.type == CommandType.UNKNOWN:
             return AssistantResponse(text="I don't know how to handle that yet.")
 
         service = self._registry.find_handler(command.type)
 
         if service is None:
-            return AssistantResponse(text="That capability is not currently available.")
+            return AssistantResponse(
+                text=("That capability is not currently available.")
+            )
 
         try:
             return await service.execute(
@@ -65,6 +83,9 @@ class Assistant:
                 context=self._context,
             )
         except Exception:
+            print("\n[ERROR] Request failed:")
+            traceback.print_exc()
+
             return AssistantResponse(
-                text="Something went wrong while handling that request."
+                text=("Something went wrong while handling that request.")
             )

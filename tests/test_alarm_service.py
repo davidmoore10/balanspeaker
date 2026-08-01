@@ -10,7 +10,6 @@ from models.command import Command, CommandType
 from services.alarm import AlarmService
 from tests.helpers import build_test_context
 
-
 TIMER_ID = UUID("00000000-0000-0000-0000-000000000001")
 
 

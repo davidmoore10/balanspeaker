@@ -11,7 +11,6 @@ from domains.alarm.manager import AlarmManager
 from domains.alarm.status import AlarmStatus
 from models.event import EventType
 
-
 TIMER_ID = UUID("00000000-0000-0000-0000-000000000001")
 
 

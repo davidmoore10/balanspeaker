@@ -1,6 +1,9 @@
 """Fallback coordination between chatbot providers."""
 
-from ai.errors import ChatbotProviderUnavailableError
+from ai.errors import (
+    ChatbotAuthenticationError,
+    ChatbotProviderUnavailableError,
+)
 from ai.provider import ChatbotProvider
 from domains.conversation.message import ConversationMessage
 
@@ -26,6 +29,18 @@ class FallbackChatbotProvider(ChatbotProvider):
         return f"{self._primary.name} -> {self._fallback.name}"
 
     @property
+    def primary(self) -> ChatbotProvider:
+        """Return the primary provider."""
+
+        return self._primary
+
+    @property
+    def fallback(self) -> ChatbotProvider:
+        """Return the fallback provider."""
+
+        return self._fallback
+
+    @property
     def last_provider_name(self) -> str | None:
         """Return the provider used for the latest request."""
 
@@ -42,11 +57,14 @@ class FallbackChatbotProvider(ChatbotProvider):
         *,
         history: tuple[ConversationMessage, ...],
     ) -> str:
-        """Use the primary provider, falling back if unavailable."""
+        """Use the primary provider, falling back when necessary."""
 
         try:
             response = await self._primary.generate_response(history=history)
-        except ChatbotProviderUnavailableError:
+        except (
+            ChatbotProviderUnavailableError,
+            ChatbotAuthenticationError,
+        ):
             self._last_provider_name = self._fallback.name
             self._last_used_fallback = True
 
