@@ -46,7 +46,7 @@ def test_default_openai_settings(
     assert settings.chatbot_provider == "openai"
     assert settings.openai_api_key == "test-key"
     assert settings.openai_model == "gpt-5-mini"
-    assert settings.openai_max_output_tokens == 180
+    assert settings.openai_max_output_tokens == 500
     assert settings.openai_timeout_seconds == 30
     assert settings.ollama_model == "llama3.2:1b"
     assert settings.ollama_keep_alive == "30m"
@@ -138,6 +138,6 @@ def test_invalid_provider_is_rejected(
 
     with pytest.raises(
         ValueError,
-        match="'openai', 'ollama' or 'stub'",
+        match=("BALANSPEAKER_CHATBOT_PROVIDER must be one of: ollama, openai, stub"),
     ):
         load_settings()

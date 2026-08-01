@@ -1,4 +1,4 @@
-"""Construction of configured speech-recognition components."""
+"""Construction of speech-recognition components."""
 
 from config.settings import Settings
 from speech_recognition.faster_whisper_provider import (
@@ -6,6 +6,9 @@ from speech_recognition.faster_whisper_provider import (
 )
 from speech_recognition.microphone import MicrophoneRecorder
 from speech_recognition.provider import SpeechToTextProvider
+from speech_recognition.silence import (
+    SilenceDetectionSettings,
+)
 
 
 def build_speech_to_text_provider(
@@ -32,8 +35,19 @@ def build_microphone_recorder(
 ) -> MicrophoneRecorder:
     """Build the configured microphone recorder."""
 
+    silence_settings = SilenceDetectionSettings(
+        speech_threshold=(settings.microphone_speech_threshold),
+        silence_duration_seconds=(settings.microphone_silence_seconds),
+        speech_start_timeout_seconds=(settings.microphone_start_timeout_seconds),
+        maximum_recording_seconds=(settings.microphone_maximum_recording_seconds),
+        minimum_speech_seconds=(settings.microphone_minimum_speech_seconds),
+        pre_roll_seconds=(settings.microphone_pre_roll_seconds),
+    )
+
     return MicrophoneRecorder(
         sample_rate=settings.microphone_sample_rate,
         channels=1,
         device=settings.microphone_device,
+        block_duration_seconds=(settings.microphone_block_seconds),
+        silence_settings=silence_settings,
     )

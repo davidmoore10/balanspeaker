@@ -164,13 +164,18 @@ async def deliver_response(
 
 async def capture_voice_command(
     context: ApplicationContext,
+    *,
+    manual: bool = False,
 ) -> str | None:
     """Record and transcribe one utterance."""
 
     await context.speech_manager.interrupt()
 
     try:
-        recorded_audio = await context.microphone_recorder.record_push_to_talk()
+        if manual:
+            recorded_audio = await context.microphone_recorder.record_push_to_talk()
+        else:
+            recorded_audio = await context.microphone_recorder.record_until_silence()
 
         print("Transcribing...")
 
@@ -237,7 +242,7 @@ async def consume_events(
 
 
 async def run_application() -> None:
-    """Run the text and push-to-talk interface."""
+    """Run the text and voice development interface."""
 
     assistant, timer_scheduler, context = build_application()
 
@@ -262,7 +267,8 @@ async def run_application() -> None:
     print(f"Speech recognition: {context.speech_to_text_provider.name}")
     print("Mode: command")
     print("Say or type 'engage AI' for conversation.")
-    print("Type /voice for push-to-talk.")
+    print("Type /voice for automatic recording.")
+    print("Type /voice-manual for manual recording.")
     print("Type /microphones to list input devices.")
     print("Type /ai-usage to view token usage.")
 
@@ -304,15 +310,20 @@ async def run_application() -> None:
 
                 continue
 
-            if normalized_text == "/voice":
-                voice_text = await capture_voice_command(context)
+            if normalized_text in {
+                "/voice",
+                "/voice-manual",
+            }:
+                voice_text = await capture_voice_command(
+                    context,
+                    manual=(normalized_text == "/voice-manual"),
+                )
 
                 if voice_text is None:
                     continue
 
                 user_text = voice_text
             else:
-                # Any new typed request interrupts active speech.
                 await context.speech_manager.interrupt()
 
             response = await assistant.handle_text(user_text)

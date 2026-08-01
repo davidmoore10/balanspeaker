@@ -13,7 +13,7 @@ class Settings:
 
     openai_api_key: str = ""
     openai_model: str = "gpt-5-mini"
-    openai_max_output_tokens: int = 180
+    openai_max_output_tokens: int = 500
     openai_timeout_seconds: float = 30.0
 
     ollama_host: str = "http://localhost:11434"
@@ -34,233 +34,127 @@ class Settings:
     microphone_sample_rate: int = 16000
     microphone_device: int | str | None = None
 
+    microphone_block_seconds: float = 0.1
+    microphone_speech_threshold: float = 0.015
+    microphone_silence_seconds: float = 1.0
+    microphone_start_timeout_seconds: float = 5.0
+    microphone_maximum_recording_seconds: float = 20.0
+    microphone_minimum_speech_seconds: float = 0.2
+    microphone_pre_roll_seconds: float = 0.3
+
 
 def load_settings() -> Settings:
     """Load and validate application settings."""
 
-    chatbot_provider = (
-        os.getenv(
-            "BALANSPEAKER_CHATBOT_PROVIDER",
-            "openai",
-        )
-        .strip()
-        .lower()
+    chatbot_provider = _read_choice(
+        name="BALANSPEAKER_CHATBOT_PROVIDER",
+        default="openai",
+        choices={"openai", "ollama", "stub"},
     )
-
-    supported_chatbot_providers = {
-        "openai",
-        "ollama",
-        "stub",
-    }
-
-    if chatbot_provider not in supported_chatbot_providers:
-        raise ValueError(
-            "BALANSPEAKER_CHATBOT_PROVIDER must be 'openai', 'ollama' or 'stub'."
-        )
 
     openai_api_key = os.getenv(
         "OPENAI_API_KEY",
         "",
     ).strip()
 
-    openai_model = os.getenv(
-        "BALANSPEAKER_OPENAI_MODEL",
-        "gpt-5-mini",
-    ).strip()
-
-    openai_max_output_tokens_text = os.getenv(
-        "BALANSPEAKER_OPENAI_MAX_OUTPUT_TOKENS",
-        "180",
-    ).strip()
-
-    openai_timeout_text = os.getenv(
-        "BALANSPEAKER_OPENAI_TIMEOUT_SECONDS",
-        "30",
-    ).strip()
-
-    ollama_host = os.getenv(
-        "BALANSPEAKER_OLLAMA_HOST",
-        "http://localhost:11434",
-    ).strip()
-
-    ollama_model = os.getenv(
-        "BALANSPEAKER_OLLAMA_MODEL",
-        "llama3.2:1b",
-    ).strip()
-
-    ollama_temperature_text = os.getenv(
-        "BALANSPEAKER_OLLAMA_TEMPERATURE",
-        "0.3",
-    ).strip()
-
-    ollama_keep_alive = os.getenv(
-        "BALANSPEAKER_OLLAMA_KEEP_ALIVE",
-        "30m",
-    ).strip()
-
-    speech_provider = (
-        os.getenv(
-            "BALANSPEAKER_SPEECH_PROVIDER",
-            "piper",
-        )
-        .strip()
-        .lower()
+    openai_model = _read_non_empty(
+        name="BALANSPEAKER_OPENAI_MODEL",
+        default="gpt-5-mini",
     )
 
-    piper_voice_path_text = os.getenv(
-        "BALANSPEAKER_PIPER_VOICE_PATH",
-        ("models_data/piper/en_GB-jenny_dioco-medium.onnx"),
-    ).strip()
-
-    speech_to_text_provider = (
-        os.getenv(
-            "BALANSPEAKER_STT_PROVIDER",
-            "faster-whisper",
-        )
-        .strip()
-        .lower()
+    openai_max_output_tokens = _read_positive_int(
+        name=("BALANSPEAKER_OPENAI_MAX_OUTPUT_TOKENS"),
+        default=500,
     )
 
-    whisper_model = os.getenv(
-        "BALANSPEAKER_WHISPER_MODEL",
-        "base.en",
-    ).strip()
-
-    whisper_device = (
-        os.getenv(
-            "BALANSPEAKER_WHISPER_DEVICE",
-            "cpu",
-        )
-        .strip()
-        .lower()
+    openai_timeout_seconds = _read_positive_float(
+        name="BALANSPEAKER_OPENAI_TIMEOUT_SECONDS",
+        default=30.0,
     )
-
-    whisper_compute_type = (
-        os.getenv(
-            "BALANSPEAKER_WHISPER_COMPUTE_TYPE",
-            "int8",
-        )
-        .strip()
-        .lower()
-    )
-
-    whisper_language = (
-        os.getenv(
-            "BALANSPEAKER_WHISPER_LANGUAGE",
-            "en",
-        )
-        .strip()
-        .lower()
-    )
-
-    whisper_beam_size_text = os.getenv(
-        "BALANSPEAKER_WHISPER_BEAM_SIZE",
-        "5",
-    ).strip()
-
-    microphone_sample_rate_text = os.getenv(
-        "BALANSPEAKER_MICROPHONE_SAMPLE_RATE",
-        "16000",
-    ).strip()
-
-    microphone_device_text = os.getenv(
-        "BALANSPEAKER_MICROPHONE_DEVICE",
-        "",
-    ).strip()
 
     if chatbot_provider == "openai" and not openai_api_key:
         raise ValueError(
             "OPENAI_API_KEY must be configured when using the OpenAI chatbot provider."
         )
 
-    if not openai_model:
-        raise ValueError("BALANSPEAKER_OPENAI_MODEL cannot be empty.")
+    ollama_host = _read_non_empty(
+        name="BALANSPEAKER_OLLAMA_HOST",
+        default="http://localhost:11434",
+    )
 
-    try:
-        openai_max_output_tokens = int(openai_max_output_tokens_text)
-    except ValueError as error:
-        raise ValueError(
-            "BALANSPEAKER_OPENAI_MAX_OUTPUT_TOKENS must be an integer."
-        ) from error
+    ollama_model = _read_non_empty(
+        name="BALANSPEAKER_OLLAMA_MODEL",
+        default="llama3.2:1b",
+    )
 
-    if openai_max_output_tokens <= 0:
-        raise ValueError(
-            "BALANSPEAKER_OPENAI_MAX_OUTPUT_TOKENS must be greater than zero."
-        )
-
-    try:
-        openai_timeout_seconds = float(openai_timeout_text)
-    except ValueError as error:
-        raise ValueError(
-            "BALANSPEAKER_OPENAI_TIMEOUT_SECONDS must be numeric."
-        ) from error
-
-    if openai_timeout_seconds <= 0:
-        raise ValueError(
-            "BALANSPEAKER_OPENAI_TIMEOUT_SECONDS must be greater than zero."
-        )
-
-    if not ollama_host:
-        raise ValueError("BALANSPEAKER_OLLAMA_HOST cannot be empty.")
-
-    if not ollama_model:
-        raise ValueError("BALANSPEAKER_OLLAMA_MODEL cannot be empty.")
-
-    try:
-        ollama_temperature = float(ollama_temperature_text)
-    except ValueError as error:
-        raise ValueError("BALANSPEAKER_OLLAMA_TEMPERATURE must be numeric.") from error
+    ollama_temperature = _read_float(
+        name="BALANSPEAKER_OLLAMA_TEMPERATURE",
+        default=0.3,
+    )
 
     if not 0 <= ollama_temperature <= 2:
         raise ValueError(
             "BALANSPEAKER_OLLAMA_TEMPERATURE must be between zero and two."
         )
 
-    if not ollama_keep_alive:
-        raise ValueError("BALANSPEAKER_OLLAMA_KEEP_ALIVE cannot be empty.")
+    ollama_keep_alive = _read_non_empty(
+        name="BALANSPEAKER_OLLAMA_KEEP_ALIVE",
+        default="30m",
+    )
 
-    if speech_provider not in {"piper", "silent"}:
-        raise ValueError("BALANSPEAKER_SPEECH_PROVIDER must be 'piper' or 'silent'.")
+    speech_provider = _read_choice(
+        name="BALANSPEAKER_SPEECH_PROVIDER",
+        default="piper",
+        choices={"piper", "silent"},
+    )
 
-    if not piper_voice_path_text:
-        raise ValueError("BALANSPEAKER_PIPER_VOICE_PATH cannot be empty.")
-
-    if speech_to_text_provider != "faster-whisper":
-        raise ValueError("BALANSPEAKER_STT_PROVIDER must be 'faster-whisper'.")
-
-    if not whisper_model:
-        raise ValueError("BALANSPEAKER_WHISPER_MODEL cannot be empty.")
-
-    if not whisper_device:
-        raise ValueError("BALANSPEAKER_WHISPER_DEVICE cannot be empty.")
-
-    if not whisper_compute_type:
-        raise ValueError("BALANSPEAKER_WHISPER_COMPUTE_TYPE cannot be empty.")
-
-    if not whisper_language:
-        raise ValueError("BALANSPEAKER_WHISPER_LANGUAGE cannot be empty.")
-
-    try:
-        whisper_beam_size = int(whisper_beam_size_text)
-    except ValueError as error:
-        raise ValueError(
-            "BALANSPEAKER_WHISPER_BEAM_SIZE must be an integer."
-        ) from error
-
-    if whisper_beam_size <= 0:
-        raise ValueError("BALANSPEAKER_WHISPER_BEAM_SIZE must be greater than zero.")
-
-    try:
-        microphone_sample_rate = int(microphone_sample_rate_text)
-    except ValueError as error:
-        raise ValueError(
-            "BALANSPEAKER_MICROPHONE_SAMPLE_RATE must be an integer."
-        ) from error
-
-    if microphone_sample_rate <= 0:
-        raise ValueError(
-            "BALANSPEAKER_MICROPHONE_SAMPLE_RATE must be greater than zero."
+    piper_voice_path = Path(
+        _read_non_empty(
+            name="BALANSPEAKER_PIPER_VOICE_PATH",
+            default=("models_data/piper/en_GB-jenny_dioco-medium.onnx"),
         )
+    )
+
+    speech_to_text_provider = _read_choice(
+        name="BALANSPEAKER_STT_PROVIDER",
+        default="faster-whisper",
+        choices={"faster-whisper"},
+    )
+
+    whisper_model = _read_non_empty(
+        name="BALANSPEAKER_WHISPER_MODEL",
+        default="base.en",
+    )
+
+    whisper_device = _read_non_empty(
+        name="BALANSPEAKER_WHISPER_DEVICE",
+        default="cpu",
+    ).lower()
+
+    whisper_compute_type = _read_non_empty(
+        name="BALANSPEAKER_WHISPER_COMPUTE_TYPE",
+        default="int8",
+    ).lower()
+
+    whisper_language = _read_non_empty(
+        name="BALANSPEAKER_WHISPER_LANGUAGE",
+        default="en",
+    ).lower()
+
+    whisper_beam_size = _read_positive_int(
+        name="BALANSPEAKER_WHISPER_BEAM_SIZE",
+        default=5,
+    )
+
+    microphone_sample_rate = _read_positive_int(
+        name="BALANSPEAKER_MICROPHONE_SAMPLE_RATE",
+        default=16000,
+    )
+
+    microphone_device_text = os.getenv(
+        "BALANSPEAKER_MICROPHONE_DEVICE",
+        "",
+    ).strip()
 
     microphone_device: int | str | None
 
@@ -271,6 +165,41 @@ def load_settings() -> Settings:
             microphone_device = int(microphone_device_text)
         except ValueError:
             microphone_device = microphone_device_text
+
+    microphone_block_seconds = _read_positive_float(
+        name="BALANSPEAKER_MICROPHONE_BLOCK_SECONDS",
+        default=0.1,
+    )
+
+    microphone_speech_threshold = _read_positive_float(
+        name=("BALANSPEAKER_MICROPHONE_SPEECH_THRESHOLD"),
+        default=0.015,
+    )
+
+    microphone_silence_seconds = _read_positive_float(
+        name=("BALANSPEAKER_MICROPHONE_SILENCE_SECONDS"),
+        default=1.0,
+    )
+
+    microphone_start_timeout_seconds = _read_positive_float(
+        name=("BALANSPEAKER_MICROPHONE_START_TIMEOUT_SECONDS"),
+        default=5.0,
+    )
+
+    microphone_maximum_recording_seconds = _read_positive_float(
+        name=("BALANSPEAKER_MICROPHONE_MAXIMUM_SECONDS"),
+        default=20.0,
+    )
+
+    microphone_minimum_speech_seconds = _read_non_negative_float(
+        name=("BALANSPEAKER_MICROPHONE_MINIMUM_SPEECH_SECONDS"),
+        default=0.2,
+    )
+
+    microphone_pre_roll_seconds = _read_non_negative_float(
+        name=("BALANSPEAKER_MICROPHONE_PRE_ROLL_SECONDS"),
+        default=0.3,
+    )
 
     return Settings(
         chatbot_provider=chatbot_provider,
@@ -283,7 +212,7 @@ def load_settings() -> Settings:
         ollama_temperature=ollama_temperature,
         ollama_keep_alive=ollama_keep_alive,
         speech_provider=speech_provider,
-        piper_voice_path=Path(piper_voice_path_text),
+        piper_voice_path=piper_voice_path,
         speech_to_text_provider=speech_to_text_provider,
         whisper_model=whisper_model,
         whisper_device=whisper_device,
@@ -292,4 +221,118 @@ def load_settings() -> Settings:
         whisper_beam_size=whisper_beam_size,
         microphone_sample_rate=microphone_sample_rate,
         microphone_device=microphone_device,
+        microphone_block_seconds=(microphone_block_seconds),
+        microphone_speech_threshold=(microphone_speech_threshold),
+        microphone_silence_seconds=(microphone_silence_seconds),
+        microphone_start_timeout_seconds=(microphone_start_timeout_seconds),
+        microphone_maximum_recording_seconds=(microphone_maximum_recording_seconds),
+        microphone_minimum_speech_seconds=(microphone_minimum_speech_seconds),
+        microphone_pre_roll_seconds=(microphone_pre_roll_seconds),
     )
+
+
+def _read_choice(
+    *,
+    name: str,
+    default: str,
+    choices: set[str],
+) -> str:
+    """Read an environment value from an allowed set."""
+
+    value = os.getenv(name, default).strip().lower()
+
+    if value not in choices:
+        formatted_choices = ", ".join(sorted(choices))
+
+        raise ValueError(f"{name} must be one of: {formatted_choices}.")
+
+    return value
+
+
+def _read_non_empty(
+    *,
+    name: str,
+    default: str,
+) -> str:
+    """Read a required non-empty string."""
+
+    value = os.getenv(name, default).strip()
+
+    if not value:
+        raise ValueError(f"{name} cannot be empty.")
+
+    return value
+
+
+def _read_float(
+    *,
+    name: str,
+    default: float,
+) -> float:
+    """Read a floating-point environment value."""
+
+    value = os.getenv(name, str(default)).strip()
+
+    try:
+        return float(value)
+    except ValueError as error:
+        raise ValueError(f"{name} must be numeric.") from error
+
+
+def _read_positive_float(
+    *,
+    name: str,
+    default: float,
+) -> float:
+    """Read a positive floating-point value."""
+
+    value = _read_float(
+        name=name,
+        default=default,
+    )
+
+    if value <= 0:
+        raise ValueError(f"{name} must be greater than zero.")
+
+    return value
+
+
+def _read_non_negative_float(
+    *,
+    name: str,
+    default: float,
+) -> float:
+    """Read a non-negative floating-point value."""
+
+    value = _read_float(
+        name=name,
+        default=default,
+    )
+
+    if value < 0:
+        raise ValueError(f"{name} cannot be negative.")
+
+    return value
+
+
+def _read_positive_int(
+    *,
+    name: str,
+    default: int,
+) -> int:
+    """Read a positive integer value."""
+
+    raw_value = os.getenv(
+        name,
+        str(default),
+    ).strip()
+
+    try:
+        value = int(raw_value)
+    except ValueError as error:
+        raise ValueError(f"{name} must be an integer.") from error
+
+    if value <= 0:
+        raise ValueError(f"{name} must be greater than zero.")
+
+    return value

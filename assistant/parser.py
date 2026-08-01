@@ -3,6 +3,7 @@
 import re
 from abc import ABC, abstractmethod
 
+from assistant.duration_parser import parse_duration_seconds
 from models.command import Command, CommandType
 from models.parser_error import ParserError, ParserErrorCode
 
@@ -136,11 +137,6 @@ class RuleBasedCommandParser(CommandParser):
         "countdown",
     }
 
-    _TIMER_PATTERN = re.compile(
-        r"\b(?P<duration>\d+(?:\.\d+)?)\s*"
-        r"(?P<unit>seconds?|secs?|minutes?|mins?|hours?|hrs?)?\b"
-    )
-
     _NAMED_TIMER_PATTERN = re.compile(
         r"\b(?:set|start)\s+(?:a|the|my)\s+"
         r"(?P<name>[a-z][a-z0-9 _-]*?)\s+timer\b"
@@ -152,6 +148,21 @@ class RuleBasedCommandParser(CommandParser):
         r"(?:(?P<name>[a-z][a-z0-9 _-]*?)\s+)?"
         r"timers?\b"
     )
+
+    _DURATION_UNIT_WORDS = {
+        "second",
+        "seconds",
+        "sec",
+        "secs",
+        "minute",
+        "minutes",
+        "min",
+        "mins",
+        "hour",
+        "hours",
+        "hr",
+        "hrs",
+    }
 
     def parse(self, user_text: str) -> Command:
         """Convert user text into a structured command."""
@@ -270,64 +281,25 @@ class RuleBasedCommandParser(CommandParser):
     ) -> Command:
         """Parse a timer creation request."""
 
-        match = self._TIMER_PATTERN.search(normalized_text)
+        duration_seconds = parse_duration_seconds(normalized_text)
 
-        if match is None:
+        if duration_seconds is None:
             return Command(
                 type=CommandType.START_TIMER,
                 original_text=original_text,
                 error=ParserError(
-                    code=ParserErrorCode.MISSING_TIMER_DURATION,
-                    message="Please specify how long the timer should run.",
+                    code=(ParserErrorCode.MISSING_TIMER_DURATION),
+                    message=("Please specify how long the timer should run."),
                 ),
             )
-
-        raw_duration = match.group("duration")
-        raw_unit = match.group("unit") or "seconds"
-
-        try:
-            duration = float(raw_duration)
-        except ValueError:
-            return Command(
-                type=CommandType.START_TIMER,
-                original_text=original_text,
-                error=ParserError(
-                    code=ParserErrorCode.INVALID_TIMER_DURATION,
-                    message="The timer duration is invalid.",
-                ),
-            )
-
-        if duration <= 0:
-            return Command(
-                type=CommandType.START_TIMER,
-                original_text=original_text,
-                error=ParserError(
-                    code=ParserErrorCode.INVALID_TIMER_DURATION,
-                    message="The timer duration must be greater than zero.",
-                ),
-            )
-
-        multiplier = self._unit_multiplier(raw_unit)
-
-        if multiplier is None:
-            return Command(
-                type=CommandType.START_TIMER,
-                original_text=original_text,
-                error=ParserError(
-                    code=ParserErrorCode.UNSUPPORTED_TIMER_UNIT,
-                    message="That timer unit is not supported.",
-                ),
-            )
-
-        duration_seconds = round(duration * multiplier)
 
         if duration_seconds <= 0:
             return Command(
                 type=CommandType.START_TIMER,
                 original_text=original_text,
                 error=ParserError(
-                    code=ParserErrorCode.INVALID_TIMER_DURATION,
-                    message="The timer duration is too short.",
+                    code=(ParserErrorCode.INVALID_TIMER_DURATION),
+                    message=("The timer duration must be greater than zero."),
                 ),
             )
 
@@ -354,6 +326,7 @@ class RuleBasedCommandParser(CommandParser):
         """Parse a timer cancellation request."""
 
         match = self._CANCEL_TIMER_PATTERN.search(normalized_text)
+
         parameters: dict[str, object] = {}
 
         if match is not None:
@@ -384,56 +357,35 @@ class RuleBasedCommandParser(CommandParser):
 
         name = match.group("name").strip()
 
-        return name or None
+        if not name:
+            return None
+
+        # Avoid interpreting phrases such as
+        # "start a twenty second timer" as a named timer.
+        name_words = set(name.split())
+
+        if name_words & self._DURATION_UNIT_WORDS:
+            return None
+
+        return name
 
     def _looks_like_timer_request(
         self,
         normalized_text: str,
     ) -> bool:
-        """Return whether the text appears to request a timer."""
+        """Return whether text appears to request a timer."""
 
         words = set(normalized_text.split())
+
         return bool(words & self._TIMER_KEYWORDS)
 
     def _is_cancel_timer_request(
         self,
         normalized_text: str,
     ) -> bool:
-        """Return whether the text requests timer cancellation."""
+        """Return whether text requests timer cancellation."""
 
         return self._CANCEL_TIMER_PATTERN.search(normalized_text) is not None
-
-    @staticmethod
-    def _unit_multiplier(unit: str) -> int | None:
-        """Return the number of seconds represented by a unit."""
-
-        normalized_unit = unit.lower()
-
-        if normalized_unit in {
-            "second",
-            "seconds",
-            "sec",
-            "secs",
-        }:
-            return 1
-
-        if normalized_unit in {
-            "minute",
-            "minutes",
-            "min",
-            "mins",
-        }:
-            return 60
-
-        if normalized_unit in {
-            "hour",
-            "hours",
-            "hr",
-            "hrs",
-        }:
-            return 3600
-
-        return None
 
     @staticmethod
     def _normalize(user_text: str) -> str:
