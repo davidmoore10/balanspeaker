@@ -16,7 +16,7 @@ class CommandParser(ABC):
 
 
 class RuleBasedCommandParser(CommandParser):
-    """Parse a defined set of commands using deterministic rules."""
+    """Parse device commands and route other text to conversation."""
 
     _GREETINGS = {
         "hello",
@@ -169,7 +169,10 @@ class RuleBasedCommandParser(CommandParser):
             )
 
         return Command(
-            type=CommandType.UNKNOWN,
+            type=CommandType.CHAT,
+            parameters={
+                "message": original_text.strip(),
+            },
             original_text=original_text,
         )
 

@@ -24,6 +24,8 @@ class CommandType(StrEnum):
     RESUME_MEDIA = "resume_media"
     STOP_MEDIA = "stop_media"
 
+    CHAT = "chat"
+
     UNKNOWN = "unknown"
 
 

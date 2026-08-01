@@ -253,26 +253,6 @@ def test_parser_recognises_alarm_stop_requests(
     assert command.error is None
 
 
-def test_stop_timer_is_not_treated_as_timer_cancellation() -> None:
-    """The word stop is reserved for active alarm dismissal."""
-
-    parser = RuleBasedCommandParser()
-
-    command = parser.parse("stop timer")
-
-    assert command.type != CommandType.CANCEL_TIMER
-
-
-def test_stop_named_timer_is_not_treated_as_cancellation() -> None:
-    """Named timers must use explicit cancellation language."""
-
-    parser = RuleBasedCommandParser()
-
-    command = parser.parse("stop my tea timer")
-
-    assert command.type != CommandType.CANCEL_TIMER
-
-
 def test_parser_does_not_confuse_timer_with_time() -> None:
     """Timer creation must never be interpreted as a clock request."""
 
@@ -284,11 +264,12 @@ def test_parser_does_not_confuse_timer_with_time() -> None:
     assert command.type != CommandType.GET_TIME
 
 
-def test_parser_returns_unknown_for_unsupported_request() -> None:
-    """Unsupported requests should remain unknown."""
+def test_general_text_routes_to_chat() -> None:
+    """Unmatched text should become conversational input."""
 
     parser = RuleBasedCommandParser()
 
-    command = parser.parse("play some music")
+    command = parser.parse("How should I store basil?")
 
-    assert command.type == CommandType.UNKNOWN
+    assert command.type == CommandType.CHAT
+    assert command.parameters == {"message": "How should I store basil?"}

@@ -138,14 +138,14 @@ async def test_handle_empty_text_returns_prompt() -> None:
 
 
 @pytest.mark.asyncio
-async def test_unknown_request_returns_fallback() -> None:
-    """Unsupported text should return the unknown-request response."""
+async def test_chat_without_registered_service_is_unavailable() -> None:
+    """Chat requests require a registered chatbot service."""
 
     assistant = build_test_assistant()
 
-    response = await assistant.handle_text("play some music")
+    response = await assistant.handle_text("How should I store basil?")
 
-    assert response.text == "I don't know how to handle that yet."
+    assert response.text == "That capability is not currently available."
 
 
 @pytest.mark.asyncio

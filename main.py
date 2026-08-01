@@ -2,6 +2,7 @@
 
 import asyncio
 
+from ai.stub import StubChatbotProvider
 from assistant.assistant import Assistant
 from assistant.context import ApplicationContext
 from assistant.event_handler import handle_event
@@ -12,9 +13,11 @@ from core.event_bus import EventBus
 from domains.alarm.manager import AlarmManager
 from domains.audio.backend import SimulatedAudioBackend
 from domains.audio.manager import AudioManager
+from domains.conversation.manager import ConversationManager
 from domains.timer.manager import TimerManager
 from domains.timer.scheduler import TimerScheduler
 from services.alarm import AlarmService
+from services.chatbot import ChatbotService
 from services.clock import ClockService
 from services.greeting import GreetingService
 from services.media import MediaService
@@ -47,6 +50,13 @@ def build_application() -> tuple[
         backend=audio_backend,
     )
 
+    conversation_manager = ConversationManager(
+        clock=clock,
+        maximum_messages=20,
+    )
+
+    chatbot_provider = StubChatbotProvider()
+
     timer_scheduler = TimerScheduler(
         timer_manager=timer_manager,
         poll_interval_seconds=0.25,
@@ -58,6 +68,8 @@ def build_application() -> tuple[
         timer_manager=timer_manager,
         alarm_manager=alarm_manager,
         audio_manager=audio_manager,
+        conversation_manager=conversation_manager,
+        chatbot_provider=chatbot_provider,
     )
 
     registry = ServiceRegistry()
@@ -66,6 +78,7 @@ def build_application() -> tuple[
     registry.register(TimerService())
     registry.register(AlarmService())
     registry.register(MediaService())
+    registry.register(ChatbotService())
 
     assistant = Assistant(
         registry=registry,
