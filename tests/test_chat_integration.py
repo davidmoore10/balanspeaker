@@ -2,15 +2,16 @@
 
 import pytest
 
+from ai.stub import StubChatbotProvider
 from domains.conversation.role import ConversationRole
 from main import build_application
 
 
 @pytest.mark.asyncio
 async def test_application_handles_general_question() -> None:
-    """The production assistant should register the chatbot service."""
+    """The production application structure should support chat."""
 
-    assistant, _, context = build_application()
+    assistant, _, context = build_application(chatbot_provider=StubChatbotProvider())
 
     response = await assistant.handle_text("How should I store fresh basil?")
 
@@ -27,7 +28,7 @@ async def test_application_handles_general_question() -> None:
 async def test_application_preserves_follow_up_context() -> None:
     """Follow-up questions should see earlier conversation history."""
 
-    assistant, _, context = build_application()
+    assistant, _, context = build_application(chatbot_provider=StubChatbotProvider())
 
     await assistant.handle_text("How should I store fresh basil?")
 
@@ -40,9 +41,9 @@ async def test_application_preserves_follow_up_context() -> None:
 
 @pytest.mark.asyncio
 async def test_device_commands_do_not_enter_chat_history() -> None:
-    """Timer and media commands should not pollute conversation history."""
+    """Device commands should not pollute conversation history."""
 
-    assistant, _, context = build_application()
+    assistant, _, context = build_application(chatbot_provider=StubChatbotProvider())
 
     await assistant.handle_text("timer 5")
     await assistant.handle_text("play music")

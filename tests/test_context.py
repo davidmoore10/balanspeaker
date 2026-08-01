@@ -19,6 +19,9 @@ def test_context_exposes_shared_dependencies() -> None:
     assert context.timer_manager is not None
     assert context.alarm_manager is not None
     assert context.audio_manager is not None
+    assert context.conversation_manager is not None
+    assert context.chatbot_provider is not None
+    assert context.speech_provider is not None
 
 
 def test_context_dependencies_cannot_be_replaced() -> None:

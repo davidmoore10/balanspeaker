@@ -12,11 +12,14 @@ from domains.audio.backend import SimulatedAudioBackend
 from domains.audio.manager import AudioManager
 from domains.conversation.manager import ConversationManager
 from domains.timer.manager import TimerManager
+from speech.provider import SpeechProvider
+from speech.silent import SilentSpeechProvider
 
 
 def build_test_context(
     current_time: datetime | None = None,
     chatbot_provider: ChatbotProvider | None = None,
+    speech_provider: SpeechProvider | None = None,
 ) -> ApplicationContext:
     """Create a complete application context for tests."""
 
@@ -52,4 +55,5 @@ def build_test_context(
         audio_manager=audio_manager,
         conversation_manager=conversation_manager,
         chatbot_provider=(chatbot_provider or StubChatbotProvider()),
+        speech_provider=(speech_provider or SilentSpeechProvider()),
     )

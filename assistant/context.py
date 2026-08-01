@@ -9,6 +9,7 @@ from domains.alarm.manager import AlarmManager
 from domains.audio.manager import AudioManager
 from domains.conversation.manager import ConversationManager
 from domains.timer.manager import TimerManager
+from speech.provider import SpeechProvider
 
 
 @dataclass(frozen=True, slots=True)
@@ -22,3 +23,4 @@ class ApplicationContext:
     audio_manager: AudioManager
     conversation_manager: ConversationManager
     chatbot_provider: ChatbotProvider
+    speech_provider: SpeechProvider

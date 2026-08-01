@@ -2,12 +2,14 @@
 
 import asyncio
 
-from ai.stub import StubChatbotProvider
+from ai.factory import build_chatbot_provider
+from ai.provider import ChatbotProvider
 from assistant.assistant import Assistant
 from assistant.context import ApplicationContext
 from assistant.event_handler import handle_event
 from assistant.parser import RuleBasedCommandParser
 from assistant.registry import ServiceRegistry
+from config.settings import Settings, load_settings
 from core.clock import SystemClock
 from core.event_bus import EventBus
 from domains.alarm.manager import AlarmManager
@@ -22,14 +24,23 @@ from services.clock import ClockService
 from services.greeting import GreetingService
 from services.media import MediaService
 from services.timer import TimerService
+from speech.factory import build_speech_provider
+from speech.provider import SpeechProvider
 
 
-def build_application() -> tuple[
+def build_application(
+    *,
+    chatbot_provider: ChatbotProvider | None = None,
+    speech_provider: SpeechProvider | None = None,
+    settings: Settings | None = None,
+) -> tuple[
     Assistant,
     TimerScheduler,
     ApplicationContext,
 ]:
     """Create the assistant and its background infrastructure."""
+
+    application_settings = settings or load_settings()
 
     clock = SystemClock()
     event_bus = EventBus()
@@ -55,7 +66,13 @@ def build_application() -> tuple[
         maximum_messages=20,
     )
 
-    chatbot_provider = StubChatbotProvider()
+    configured_chatbot_provider = chatbot_provider or build_chatbot_provider(
+        application_settings
+    )
+
+    configured_speech_provider = speech_provider or build_speech_provider(
+        application_settings
+    )
 
     timer_scheduler = TimerScheduler(
         timer_manager=timer_manager,
@@ -69,7 +86,8 @@ def build_application() -> tuple[
         alarm_manager=alarm_manager,
         audio_manager=audio_manager,
         conversation_manager=conversation_manager,
-        chatbot_provider=chatbot_provider,
+        chatbot_provider=configured_chatbot_provider,
+        speech_provider=configured_speech_provider,
     )
 
     registry = ServiceRegistry()
@@ -96,6 +114,19 @@ async def read_user_input(prompt: str) -> str:
     return await asyncio.to_thread(input, prompt)
 
 
+async def deliver_response(
+    *,
+    assistant_name: str,
+    response_text: str,
+    speech_provider: SpeechProvider,
+) -> None:
+    """Print and speak an assistant response."""
+
+    print(f"{assistant_name}: {response_text}")
+
+    await speech_provider.speak(response_text)
+
+
 async def consume_events(
     *,
     context: ApplicationContext,
@@ -113,7 +144,12 @@ async def consume_events(
             )
 
             if message is not None:
-                print(f"\n{assistant_name}: {message}")
+                print()
+                await deliver_response(
+                    assistant_name=assistant_name,
+                    response_text=message,
+                    speech_provider=context.speech_provider,
+                )
         finally:
             context.event_bus.task_done()
 
@@ -136,7 +172,13 @@ async def run_application() -> None:
         name="event-consumer",
     )
 
-    print(assistant.start_message().text)
+    start_message = assistant.start_message().text
+
+    print(start_message)
+    print(f"Chatbot provider: {context.chatbot_provider.name}")
+    print(f"Speech provider: {context.speech_provider.name}")
+
+    await context.speech_provider.speak(start_message)
 
     try:
         while True:
@@ -151,10 +193,17 @@ async def run_application() -> None:
                 break
 
             response = await assistant.handle_text(user_text)
-            print(f"{assistant.name}: {response.text}")
+
+            await deliver_response(
+                assistant_name=assistant.name,
+                response_text=response.text,
+                speech_provider=context.speech_provider,
+            )
     finally:
         scheduler_task.cancel()
         event_consumer_task.cancel()
+
+        await context.speech_provider.stop()
 
         await asyncio.gather(
             scheduler_task,
