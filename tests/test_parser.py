@@ -31,6 +31,7 @@ def test_parser_recognises_greetings(user_text: str) -> None:
     "user_text",
     [
         "what time is it",
+        "what time it is",
         "What's the time?",
         "tell me the time",
         "current time",
@@ -69,10 +70,20 @@ def test_parser_converts_timer_duration_to_seconds(
     command = parser.parse(user_text)
 
     assert command.type == CommandType.START_TIMER
-    assert command.parameters == {
-        "duration_seconds": expected_seconds,
-    }
+    assert command.parameters["duration_seconds"] == expected_seconds
     assert command.error is None
+
+
+def test_parser_extracts_named_timer() -> None:
+    parser = RuleBasedCommandParser()
+
+    command = parser.parse("set a pasta timer for 5 minutes")
+
+    assert command.type == CommandType.START_TIMER
+    assert command.parameters == {
+        "duration_seconds": 300,
+        "name": "pasta",
+    }
 
 
 def test_parser_defaults_timer_unit_to_seconds() -> None:
@@ -120,6 +131,70 @@ def test_parser_rejects_zero_timer_duration(
     assert command.type == CommandType.START_TIMER
     assert command.error is not None
     assert command.error.code == ParserErrorCode.INVALID_TIMER_DURATION
+
+
+@pytest.mark.parametrize(
+    "user_text",
+    [
+        "list timers",
+        "list my timers",
+        "show timers",
+        "what timers are running",
+        "how long is left",
+        "how much time is left",
+        "timer status",
+        "timers",
+    ],
+)
+def test_parser_recognises_timer_list_requests(
+    user_text: str,
+) -> None:
+    parser = RuleBasedCommandParser()
+
+    command = parser.parse(user_text)
+
+    assert command.type == CommandType.LIST_TIMERS
+    assert command.parameters == {}
+
+
+@pytest.mark.parametrize(
+    "user_text",
+    [
+        "cancel timer",
+        "stop timer",
+        "delete timer",
+        "remove the timer",
+    ],
+)
+def test_parser_recognises_unnamed_timer_cancellation(
+    user_text: str,
+) -> None:
+    parser = RuleBasedCommandParser()
+
+    command = parser.parse(user_text)
+
+    assert command.type == CommandType.CANCEL_TIMER
+    assert command.parameters == {}
+
+
+@pytest.mark.parametrize(
+    ("user_text", "expected_name"),
+    [
+        ("cancel the pasta timer", "pasta"),
+        ("stop my tea timer", "tea"),
+        ("delete laundry timer", "laundry"),
+    ],
+)
+def test_parser_extracts_timer_name_for_cancellation(
+    user_text: str,
+    expected_name: str,
+) -> None:
+    parser = RuleBasedCommandParser()
+
+    command = parser.parse(user_text)
+
+    assert command.type == CommandType.CANCEL_TIMER
+    assert command.parameters == {"name": expected_name}
 
 
 def test_parser_does_not_confuse_timer_with_time() -> None:

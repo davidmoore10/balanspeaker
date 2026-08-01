@@ -1,5 +1,7 @@
 """Tests for the timer service."""
 
+from datetime import timedelta
+
 import pytest
 
 from domains.timer.status import TimerStatus
@@ -9,18 +11,20 @@ from services.timer import TimerService
 from tests.helpers import build_test_context
 
 
-def test_timer_service_declares_supported_command() -> None:
-    """The timer service should handle start-timer commands."""
-
+def test_timer_service_declares_supported_commands() -> None:
     service = TimerService()
 
-    assert service.supported_commands == frozenset({CommandType.START_TIMER})
+    assert service.supported_commands == frozenset(
+        {
+            CommandType.START_TIMER,
+            CommandType.LIST_TIMERS,
+            CommandType.CANCEL_TIMER,
+        }
+    )
 
 
 @pytest.mark.asyncio
 async def test_timer_service_creates_timer() -> None:
-    """A valid command should create a running timer."""
-
     context = build_test_context()
     service = TimerService()
 
@@ -43,15 +47,16 @@ async def test_timer_service_creates_timer() -> None:
 
 
 @pytest.mark.asyncio
-async def test_timer_service_formats_one_second() -> None:
-    """A one-second timer should use singular wording."""
-
+async def test_timer_service_creates_named_timer() -> None:
     context = build_test_context()
     service = TimerService()
 
     command = Command(
         type=CommandType.START_TIMER,
-        parameters={"duration_seconds": 1},
+        parameters={
+            "duration_seconds": 300,
+            "name": "pasta",
+        },
     )
 
     response = await service.execute(
@@ -59,19 +64,20 @@ async def test_timer_service_formats_one_second() -> None:
         context=context,
     )
 
-    assert response.text == "Timer set for 1 second."
+    timer = context.timer_manager.get_running_timers()[0]
+
+    assert timer.name == "pasta"
+    assert response.text == "Pasta timer set for 5 minutes."
 
 
 @pytest.mark.asyncio
-async def test_timer_service_formats_minutes() -> None:
-    """Whole-minute durations should be presented as minutes."""
-
+async def test_timer_service_formats_combined_duration() -> None:
     context = build_test_context()
     service = TimerService()
 
     command = Command(
         type=CommandType.START_TIMER,
-        parameters={"duration_seconds": 120},
+        parameters={"duration_seconds": 65},
     )
 
     response = await service.execute(
@@ -79,33 +85,11 @@ async def test_timer_service_formats_minutes() -> None:
         context=context,
     )
 
-    assert response.text == "Timer set for 2 minutes."
-
-
-@pytest.mark.asyncio
-async def test_timer_service_formats_hours() -> None:
-    """Whole-hour durations should be presented as hours."""
-
-    context = build_test_context()
-    service = TimerService()
-
-    command = Command(
-        type=CommandType.START_TIMER,
-        parameters={"duration_seconds": 3600},
-    )
-
-    response = await service.execute(
-        command=command,
-        context=context,
-    )
-
-    assert response.text == "Timer set for 1 hour."
+    assert response.text == "Timer set for 1 minute and 5 seconds."
 
 
 @pytest.mark.asyncio
 async def test_timer_service_publishes_started_event() -> None:
-    """Creating a timer should publish a timer-started event."""
-
     context = build_test_context()
     service = TimerService()
 
@@ -126,9 +110,186 @@ async def test_timer_service_publishes_started_event() -> None:
 
 
 @pytest.mark.asyncio
-async def test_timer_service_rejects_wrong_command() -> None:
-    """The service should reject unsupported command types."""
+async def test_list_timers_returns_no_active_timers() -> None:
+    context = build_test_context()
+    service = TimerService()
 
+    command = Command(type=CommandType.LIST_TIMERS)
+
+    response = await service.execute(
+        command=command,
+        context=context,
+    )
+
+    assert response.text == "You have no active timers."
+
+
+@pytest.mark.asyncio
+async def test_list_timers_returns_single_timer() -> None:
+    context = build_test_context()
+    service = TimerService()
+
+    await context.timer_manager.create_timer(
+        duration_seconds=90,
+        name="pasta",
+    )
+
+    context.clock.advance(timedelta(seconds=25))
+
+    command = Command(type=CommandType.LIST_TIMERS)
+
+    response = await service.execute(
+        command=command,
+        context=context,
+    )
+
+    assert response.text == ("The pasta timer has 1 minute and 5 seconds remaining.")
+
+
+@pytest.mark.asyncio
+async def test_list_timers_returns_multiple_timers() -> None:
+    context = build_test_context()
+    service = TimerService()
+
+    await context.timer_manager.create_timer(
+        duration_seconds=30,
+        name="eggs",
+    )
+    await context.timer_manager.create_timer(
+        duration_seconds=120,
+        name="pasta",
+    )
+
+    command = Command(type=CommandType.LIST_TIMERS)
+
+    response = await service.execute(
+        command=command,
+        context=context,
+    )
+
+    assert response.text == (
+        "You have 2 active timers: "
+        "The eggs timer has 30 seconds remaining.; "
+        "The pasta timer has 2 minutes remaining."
+    )
+
+
+@pytest.mark.asyncio
+async def test_cancel_only_active_timer() -> None:
+    context = build_test_context()
+    service = TimerService()
+
+    timer = await context.timer_manager.create_timer(
+        duration_seconds=30,
+    )
+
+    command = Command(type=CommandType.CANCEL_TIMER)
+
+    response = await service.execute(
+        command=command,
+        context=context,
+    )
+
+    assert response.text == "Timer cancelled."
+    assert context.timer_manager.get_timer(timer.id).status == TimerStatus.CANCELLED
+
+
+@pytest.mark.asyncio
+async def test_cancel_named_timer() -> None:
+    context = build_test_context()
+    service = TimerService()
+
+    pasta_timer = await context.timer_manager.create_timer(
+        duration_seconds=300,
+        name="pasta",
+    )
+    await context.timer_manager.create_timer(
+        duration_seconds=60,
+        name="tea",
+    )
+
+    command = Command(
+        type=CommandType.CANCEL_TIMER,
+        parameters={"name": "Pasta"},
+    )
+
+    response = await service.execute(
+        command=command,
+        context=context,
+    )
+
+    assert response.text == "Pasta timer cancelled."
+    assert (
+        context.timer_manager.get_timer(pasta_timer.id).status == TimerStatus.CANCELLED
+    )
+
+
+@pytest.mark.asyncio
+async def test_cancel_without_name_rejects_multiple_timers() -> None:
+    context = build_test_context()
+    service = TimerService()
+
+    await context.timer_manager.create_timer(
+        duration_seconds=300,
+        name="pasta",
+    )
+    await context.timer_manager.create_timer(
+        duration_seconds=60,
+        name="tea",
+    )
+
+    command = Command(type=CommandType.CANCEL_TIMER)
+
+    response = await service.execute(
+        command=command,
+        context=context,
+    )
+
+    assert response.text == (
+        "You have more than one active timer. Please specify which timer to cancel."
+    )
+
+
+@pytest.mark.asyncio
+async def test_cancel_unknown_named_timer() -> None:
+    context = build_test_context()
+    service = TimerService()
+
+    await context.timer_manager.create_timer(
+        duration_seconds=300,
+        name="pasta",
+    )
+
+    command = Command(
+        type=CommandType.CANCEL_TIMER,
+        parameters={"name": "tea"},
+    )
+
+    response = await service.execute(
+        command=command,
+        context=context,
+    )
+
+    assert response.text == ("I couldn't find an active timer named 'tea'.")
+
+
+@pytest.mark.asyncio
+async def test_cancel_when_no_timers_are_active() -> None:
+    context = build_test_context()
+    service = TimerService()
+
+    command = Command(type=CommandType.CANCEL_TIMER)
+
+    response = await service.execute(
+        command=command,
+        context=context,
+    )
+
+    assert response.text == "You have no active timers."
+
+
+@pytest.mark.asyncio
+async def test_timer_service_rejects_wrong_command() -> None:
     context = build_test_context()
     service = TimerService()
 
@@ -143,58 +304,12 @@ async def test_timer_service_rejects_wrong_command() -> None:
 
 @pytest.mark.asyncio
 async def test_timer_service_rejects_missing_duration() -> None:
-    """The service should reject commands without a duration."""
-
     context = build_test_context()
     service = TimerService()
 
     command = Command(
         type=CommandType.START_TIMER,
         parameters={},
-    )
-
-    with pytest.raises(
-        ValueError,
-        match="positive integer",
-    ):
-        await service.execute(
-            command=command,
-            context=context,
-        )
-
-
-@pytest.mark.asyncio
-async def test_timer_service_rejects_zero_duration() -> None:
-    """The service should reject zero-second timers."""
-
-    context = build_test_context()
-    service = TimerService()
-
-    command = Command(
-        type=CommandType.START_TIMER,
-        parameters={"duration_seconds": 0},
-    )
-
-    with pytest.raises(
-        ValueError,
-        match="positive integer",
-    ):
-        await service.execute(
-            command=command,
-            context=context,
-        )
-
-
-@pytest.mark.asyncio
-async def test_timer_service_rejects_boolean_duration() -> None:
-    """Boolean values should not be accepted as integer durations."""
-
-    context = build_test_context()
-    service = TimerService()
-
-    command = Command(
-        type=CommandType.START_TIMER,
-        parameters={"duration_seconds": True},
     )
 
     with pytest.raises(

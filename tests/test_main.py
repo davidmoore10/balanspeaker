@@ -7,8 +7,6 @@ from main import build_application
 
 @pytest.mark.asyncio
 async def test_built_application_can_create_timer() -> None:
-    """The production application should register the timer service."""
-
     assistant, _, event_bus = build_application()
 
     response = await assistant.handle_text("timer 5")
@@ -18,9 +16,36 @@ async def test_built_application_can_create_timer() -> None:
 
 
 @pytest.mark.asyncio
-async def test_built_application_still_handles_clock_request() -> None:
-    """Adding timers should not break the clock service."""
+async def test_built_application_can_create_named_timer() -> None:
+    assistant, _, _ = build_application()
 
+    response = await assistant.handle_text("set a pasta timer for 5 minutes")
+
+    assert response.text == "Pasta timer set for 5 minutes."
+
+
+@pytest.mark.asyncio
+async def test_built_application_can_list_timers() -> None:
+    assistant, _, _ = build_application()
+
+    await assistant.handle_text("timer 30")
+    response = await assistant.handle_text("list timers")
+
+    assert response.text == "A timer has 30 seconds remaining."
+
+
+@pytest.mark.asyncio
+async def test_built_application_can_cancel_timer() -> None:
+    assistant, _, _ = build_application()
+
+    await assistant.handle_text("timer 30")
+    response = await assistant.handle_text("cancel timer")
+
+    assert response.text == "Timer cancelled."
+
+
+@pytest.mark.asyncio
+async def test_built_application_still_handles_clock_request() -> None:
     assistant, _, _ = build_application()
 
     response = await assistant.handle_text("what time is it")

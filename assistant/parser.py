@@ -16,7 +16,7 @@ class CommandParser(ABC):
 
 
 class RuleBasedCommandParser(CommandParser):
-    """Parse a small set of commands using deterministic rules."""
+    """Parse a defined set of commands using deterministic rules."""
 
     _GREETINGS = {
         "hello",
@@ -30,19 +30,47 @@ class RuleBasedCommandParser(CommandParser):
     _TIME_REQUESTS = {
         "what time is it",
         "what's the time",
+        "what time it is",
         "tell me the time",
         "current time",
         "time",
     }
 
+    _TIMER_LIST_REQUESTS = {
+        "list timers",
+        "list my timers",
+        "show timers",
+        "show my timers",
+        "what timers are running",
+        "which timers are running",
+        "what timers do i have",
+        "how long is left",
+        "how much time is left",
+        "timer status",
+        "timers",
+    }
+
     _TIMER_KEYWORDS = {
         "timer",
+        "timers",
         "countdown",
     }
 
     _TIMER_PATTERN = re.compile(
         r"\b(?P<duration>\d+(?:\.\d+)?)\s*"
         r"(?P<unit>seconds?|secs?|minutes?|mins?|hours?|hrs?)?\b"
+    )
+
+    _NAMED_TIMER_PATTERN = re.compile(
+        r"\b(?:set|start)\s+(?:a|the|my)\s+"
+        r"(?P<name>[a-z][a-z0-9 _-]*?)\s+timer\b"
+    )
+
+    _CANCEL_TIMER_PATTERN = re.compile(
+        r"\b(?:cancel|stop|delete|remove)\s+"
+        r"(?:(?:the|my)\s+)?"
+        r"(?:(?P<name>[a-z][a-z0-9 _-]*?)\s+)?"
+        r"timers?\b"
     )
 
     def parse(self, user_text: str) -> Command:
@@ -63,8 +91,20 @@ class RuleBasedCommandParser(CommandParser):
                 original_text=original_text,
             )
 
+        if self._is_cancel_timer_request(normalized_text):
+            return self._parse_cancel_timer(
+                normalized_text=normalized_text,
+                original_text=original_text,
+            )
+
+        if normalized_text in self._TIMER_LIST_REQUESTS:
+            return Command(
+                type=CommandType.LIST_TIMERS,
+                original_text=original_text,
+            )
+
         if self._looks_like_timer_request(normalized_text):
-            return self._parse_timer(
+            return self._parse_start_timer(
                 normalized_text=normalized_text,
                 original_text=original_text,
             )
@@ -74,12 +114,12 @@ class RuleBasedCommandParser(CommandParser):
             original_text=original_text,
         )
 
-    def _parse_timer(
+    def _parse_start_timer(
         self,
         normalized_text: str,
         original_text: str,
     ) -> Command:
-        """Parse a timer request into seconds."""
+        """Parse a timer creation request."""
 
         match = self._TIMER_PATTERN.search(normalized_text)
 
@@ -142,19 +182,72 @@ class RuleBasedCommandParser(CommandParser):
                 ),
             )
 
+        parameters: dict[str, object] = {
+            "duration_seconds": duration_seconds,
+        }
+
+        timer_name = self._extract_timer_name(normalized_text)
+
+        if timer_name is not None:
+            parameters["name"] = timer_name
+
         return Command(
             type=CommandType.START_TIMER,
-            parameters={
-                "duration_seconds": duration_seconds,
-            },
+            parameters=parameters,
             original_text=original_text,
         )
+
+    def _parse_cancel_timer(
+        self,
+        normalized_text: str,
+        original_text: str,
+    ) -> Command:
+        """Parse a timer cancellation request."""
+
+        match = self._CANCEL_TIMER_PATTERN.search(normalized_text)
+
+        parameters: dict[str, object] = {}
+
+        if match is not None:
+            raw_name = match.group("name")
+
+            if raw_name is not None:
+                cleaned_name = raw_name.strip()
+
+                if cleaned_name:
+                    parameters["name"] = cleaned_name
+
+        return Command(
+            type=CommandType.CANCEL_TIMER,
+            parameters=parameters,
+            original_text=original_text,
+        )
+
+    def _extract_timer_name(self, normalized_text: str) -> str | None:
+        """Extract an optional name from a timer creation request."""
+
+        match = self._NAMED_TIMER_PATTERN.search(normalized_text)
+
+        if match is None:
+            return None
+
+        name = match.group("name").strip()
+
+        if not name:
+            return None
+
+        return name
 
     def _looks_like_timer_request(self, normalized_text: str) -> bool:
         """Return whether the text appears to be a timer request."""
 
         words = set(normalized_text.split())
         return bool(words & self._TIMER_KEYWORDS)
+
+    def _is_cancel_timer_request(self, normalized_text: str) -> bool:
+        """Return whether the user is asking to cancel a timer."""
+
+        return self._CANCEL_TIMER_PATTERN.search(normalized_text) is not None
 
     @staticmethod
     def _unit_multiplier(unit: str) -> int | None:
@@ -177,4 +270,6 @@ class RuleBasedCommandParser(CommandParser):
     def _normalize(user_text: str) -> str:
         """Normalize text for deterministic matching."""
 
-        return user_text.strip().lower().rstrip("?.!")
+        normalized_text = user_text.strip().lower().rstrip("?.!")
+
+        return re.sub(r"\s+", " ", normalized_text)
