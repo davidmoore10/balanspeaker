@@ -5,12 +5,27 @@ from uuid import UUID
 
 import pytest
 
+from assistant.context import ApplicationContext
 from assistant.event_handler import format_event_message, handle_event
+from domains.audio.backend import SimulatedAudioBackend
+from domains.audio.state import AlarmPlaybackState, MediaPlaybackState
 from models.event import Event, EventType
 from tests.helpers import build_test_context
 
 
 TIMER_ID = UUID("00000000-0000-0000-0000-000000000001")
+
+
+def get_simulated_backend(
+    context: ApplicationContext,
+) -> SimulatedAudioBackend:
+    """Return the simulated backend from a test context."""
+
+    backend = context.audio_manager.backend
+
+    assert isinstance(backend, SimulatedAudioBackend)
+
+    return backend
 
 
 def test_finished_default_timer_returns_generic_message() -> None:
@@ -73,6 +88,38 @@ async def test_handle_finished_event_starts_alarm() -> None:
     assert len(active_alarms) == 1
     assert active_alarms[0].timer_id == TIMER_ID
     assert active_alarms[0].name == "Pasta"
+    assert context.audio_manager.alarm_state == AlarmPlaybackState.ACTIVE
+
+
+@pytest.mark.asyncio
+async def test_finished_event_interrupts_media() -> None:
+    """A timer completion should pause active media."""
+
+    context = build_test_context()
+    backend = get_simulated_backend(context)
+
+    await context.audio_manager.play_media()
+    backend.clear_operations()
+
+    event = Event(
+        type=EventType.TIMER_FINISHED,
+        occurred_at=datetime(2026, 8, 1, 20, 0),
+        data={
+            "timer_id": str(TIMER_ID),
+            "name": "Pasta",
+        },
+    )
+
+    await handle_event(
+        event=event,
+        context=context,
+    )
+
+    assert context.audio_manager.media_state == MediaPlaybackState.PAUSED
+    assert backend.operations == (
+        "pause_media",
+        "start_alarm",
+    )
 
 
 @pytest.mark.asyncio
@@ -80,6 +127,7 @@ async def test_handle_invalid_timer_id_does_not_start_alarm() -> None:
     """Malformed timer IDs should not create alarms."""
 
     context = build_test_context()
+    backend = get_simulated_backend(context)
 
     event = Event(
         type=EventType.TIMER_FINISHED,
@@ -97,6 +145,7 @@ async def test_handle_invalid_timer_id_does_not_start_alarm() -> None:
 
     assert message == "Your Pasta timer has finished."
     assert context.alarm_manager.get_active_alarms() == ()
+    assert backend.operations == ()
 
 
 @pytest.mark.asyncio

@@ -13,19 +13,21 @@ async def handle_event(
 ) -> str | None:
     """Process an application event and return an optional message."""
 
-    if event.type == EventType.TIMER_FINISHED:
-        timer_id = _extract_timer_id(event)
-        timer_name = _extract_timer_name(event)
+    if event.type != EventType.TIMER_FINISHED:
+        return None
 
-        if timer_id is not None:
-            await context.alarm_manager.start_alarm(
-                timer_id=timer_id,
-                name=timer_name,
-            )
+    timer_id = _extract_timer_id(event)
+    timer_name = _extract_timer_name(event)
 
-        return _format_timer_finished_message(timer_name)
+    if timer_id is not None:
+        await context.alarm_manager.start_alarm(
+            timer_id=timer_id,
+            name=timer_name,
+        )
 
-    return None
+        await context.audio_manager.start_alarm()
+
+    return _format_timer_finished_message(timer_name)
 
 
 def format_event_message(event: Event) -> str | None:

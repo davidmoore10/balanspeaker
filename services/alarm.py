@@ -37,6 +37,7 @@ class AlarmService(Service):
             return AssistantResponse(text="There is no active alarm.")
 
         stopped_alarms = await context.alarm_manager.stop_all()
+        await context.audio_manager.stop_alarm()
 
         if len(stopped_alarms) == 1:
             alarm = stopped_alarms[0]

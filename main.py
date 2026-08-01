@@ -10,6 +10,8 @@ from assistant.registry import ServiceRegistry
 from core.clock import SystemClock
 from core.event_bus import EventBus
 from domains.alarm.manager import AlarmManager
+from domains.audio.backend import SimulatedAudioBackend
+from domains.audio.manager import AudioManager
 from domains.timer.manager import TimerManager
 from domains.timer.scheduler import TimerScheduler
 from services.alarm import AlarmService
@@ -38,6 +40,12 @@ def build_application() -> tuple[
         event_bus=event_bus,
     )
 
+    audio_backend = SimulatedAudioBackend()
+
+    audio_manager = AudioManager(
+        backend=audio_backend,
+    )
+
     timer_scheduler = TimerScheduler(
         timer_manager=timer_manager,
         poll_interval_seconds=0.25,
@@ -48,6 +56,7 @@ def build_application() -> tuple[
         event_bus=event_bus,
         timer_manager=timer_manager,
         alarm_manager=alarm_manager,
+        audio_manager=audio_manager,
     )
 
     registry = ServiceRegistry()

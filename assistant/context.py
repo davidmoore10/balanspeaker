@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from core.clock import Clock
 from core.event_bus import EventBus
 from domains.alarm.manager import AlarmManager
+from domains.audio.manager import AudioManager
 from domains.timer.manager import TimerManager
 
 
@@ -16,3 +17,4 @@ class ApplicationContext:
     event_bus: EventBus
     timer_manager: TimerManager
     alarm_manager: AlarmManager
+    audio_manager: AudioManager
