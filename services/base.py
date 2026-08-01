@@ -2,6 +2,7 @@
 
 from abc import ABC, abstractmethod
 
+from assistant.context import ApplicationContext
 from models.command import Command, CommandType
 from models.response import AssistantResponse
 
@@ -20,5 +21,9 @@ class Service(ABC):
         """Return the command types handled by this service."""
 
     @abstractmethod
-    async def execute(self, command: Command) -> AssistantResponse:
+    async def execute(
+        self,
+        command: Command,
+        context: ApplicationContext,
+    ) -> AssistantResponse:
         """Execute a structured command."""

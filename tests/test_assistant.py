@@ -1,10 +1,15 @@
 """Tests for the core assistant."""
 
+from datetime import datetime
+
 import pytest
 
 from assistant.assistant import Assistant
+from assistant.context import ApplicationContext
 from assistant.parser import RuleBasedCommandParser
 from assistant.registry import ServiceRegistry
+from core.clock import FakeClock
+from core.event_bus import EventBus
 from models.command import Command, CommandType
 from models.response import AssistantResponse
 from services.base import Service
@@ -21,7 +26,11 @@ class GreetingTestService(Service):
     def supported_commands(self) -> frozenset[CommandType]:
         return frozenset({CommandType.GREET})
 
-    async def execute(self, command: Command) -> AssistantResponse:
+    async def execute(
+        self,
+        command: Command,
+        context: ApplicationContext,
+    ) -> AssistantResponse:
         return AssistantResponse(text="Handled greeting.")
 
 
@@ -36,8 +45,21 @@ class FailingTimeService(Service):
     def supported_commands(self) -> frozenset[CommandType]:
         return frozenset({CommandType.GET_TIME})
 
-    async def execute(self, command: Command) -> AssistantResponse:
+    async def execute(
+        self,
+        command: Command,
+        context: ApplicationContext,
+    ) -> AssistantResponse:
         raise RuntimeError("Simulated service failure")
+
+
+def build_context() -> ApplicationContext:
+    """Create a test application context."""
+
+    return ApplicationContext(
+        clock=FakeClock(datetime(2026, 8, 1, 20, 0)),
+        event_bus=EventBus(),
+    )
 
 
 def build_test_assistant(
@@ -54,6 +76,7 @@ def build_test_assistant(
     return Assistant(
         registry=registry,
         parser=RuleBasedCommandParser(),
+        context=build_context(),
         name="Balanspeaker",
     )
 
@@ -62,6 +85,7 @@ def test_default_assistant_name() -> None:
     assistant = Assistant(
         registry=ServiceRegistry(),
         parser=RuleBasedCommandParser(),
+        context=build_context(),
     )
 
     assert assistant.name == "Balanspeaker"
@@ -72,6 +96,7 @@ def test_empty_assistant_name_is_rejected() -> None:
         Assistant(
             registry=ServiceRegistry(),
             parser=RuleBasedCommandParser(),
+            context=build_context(),
             name="   ",
         )
 

@@ -1,8 +1,6 @@
 """Service for reporting the current local time."""
 
-from collections.abc import Callable
-from datetime import datetime
-
+from assistant.context import ApplicationContext
 from models.command import Command, CommandType
 from models.response import AssistantResponse
 from services.base import Service
@@ -10,12 +8,6 @@ from services.base import Service
 
 class ClockService(Service):
     """Handle current-time commands."""
-
-    def __init__(
-        self,
-        now_provider: Callable[[], datetime] | None = None,
-    ) -> None:
-        self._now_provider = now_provider or datetime.now
 
     @property
     def name(self) -> str:
@@ -29,12 +21,16 @@ class ClockService(Service):
 
         return frozenset({CommandType.GET_TIME})
 
-    async def execute(self, command: Command) -> AssistantResponse:
+    async def execute(
+        self,
+        command: Command,
+        context: ApplicationContext,
+    ) -> AssistantResponse:
         """Return the current local time."""
 
         if command.type not in self.supported_commands:
             raise ValueError(f"{self.name} cannot handle command '{command.type}'.")
 
-        current_time = self._now_provider()
+        current_time = context.clock.now()
 
         return AssistantResponse(text=f"The current time is {current_time:%H:%M}.")

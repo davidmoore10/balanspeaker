@@ -1,5 +1,6 @@
 """Service for greeting the user."""
 
+from assistant.context import ApplicationContext
 from models.command import Command, CommandType
 from models.response import AssistantResponse
 from services.base import Service
@@ -20,7 +21,11 @@ class GreetingService(Service):
 
         return frozenset({CommandType.GREET})
 
-    async def execute(self, command: Command) -> AssistantResponse:
+    async def execute(
+        self,
+        command: Command,
+        context: ApplicationContext,
+    ) -> AssistantResponse:
         """Return a greeting response."""
 
         if command.type not in self.supported_commands:

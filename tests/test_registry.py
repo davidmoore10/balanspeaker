@@ -2,6 +2,7 @@
 
 import pytest
 
+from assistant.context import ApplicationContext
 from assistant.registry import (
     DuplicateCommandHandlerError,
     DuplicateServiceError,
@@ -21,7 +22,11 @@ class GreetingTestService(Service):
     def supported_commands(self) -> frozenset[CommandType]:
         return frozenset({CommandType.GREET})
 
-    async def execute(self, command: Command) -> AssistantResponse:
+    async def execute(
+        self,
+        command: Command,
+        context: ApplicationContext,
+    ) -> AssistantResponse:
         return AssistantResponse(text="Hello")
 
 

@@ -1,5 +1,6 @@
 """Core assistant application."""
 
+from assistant.context import ApplicationContext
 from assistant.parser import CommandParser
 from assistant.registry import ServiceRegistry
 from models.command import CommandType
@@ -13,6 +14,7 @@ class Assistant:
         self,
         registry: ServiceRegistry,
         parser: CommandParser,
+        context: ApplicationContext,
         name: str = "Balanspeaker",
     ) -> None:
         cleaned_name = name.strip()
@@ -23,6 +25,7 @@ class Assistant:
         self._name = cleaned_name
         self._registry = registry
         self._parser = parser
+        self._context = context
 
     @property
     def name(self) -> str:
@@ -57,7 +60,10 @@ class Assistant:
             return AssistantResponse(text="That capability is not currently available.")
 
         try:
-            return await service.execute(command)
+            return await service.execute(
+                command=command,
+                context=self._context,
+            )
         except Exception:
             return AssistantResponse(
                 text="Something went wrong while handling that request."

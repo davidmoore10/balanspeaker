@@ -3,8 +3,11 @@
 import asyncio
 
 from assistant.assistant import Assistant
+from assistant.context import ApplicationContext
 from assistant.parser import RuleBasedCommandParser
 from assistant.registry import ServiceRegistry
+from core.clock import SystemClock
+from core.event_bus import EventBus
 from services.clock import ClockService
 from services.greeting import GreetingService
 
@@ -16,11 +19,15 @@ def build_assistant() -> Assistant:
     registry.register(GreetingService())
     registry.register(ClockService())
 
-    parser = RuleBasedCommandParser()
+    context = ApplicationContext(
+        clock=SystemClock(),
+        event_bus=EventBus(),
+    )
 
     return Assistant(
         registry=registry,
-        parser=parser,
+        parser=RuleBasedCommandParser(),
+        context=context,
         name="Balanspeaker",
     )
 

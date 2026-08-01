@@ -4,9 +4,23 @@ from datetime import datetime
 
 import pytest
 
+from assistant.context import ApplicationContext
+from core.clock import FakeClock
+from core.event_bus import EventBus
 from models.command import Command, CommandType
 from services.clock import ClockService
 from services.greeting import GreetingService
+
+
+def build_context(
+    current_time: datetime | None = None,
+) -> ApplicationContext:
+    """Create an application context for service tests."""
+
+    return ApplicationContext(
+        clock=FakeClock(current_time or datetime(2026, 8, 1, 20, 0)),
+        event_bus=EventBus(),
+    )
 
 
 def test_greeting_service_declares_supported_command() -> None:
@@ -20,7 +34,10 @@ async def test_greeting_service_returns_response() -> None:
     service = GreetingService()
     command = Command(type=CommandType.GREET)
 
-    response = await service.execute(command)
+    response = await service.execute(
+        command=command,
+        context=build_context(),
+    )
 
     assert response.text == "Hello! How can I help?"
 
@@ -31,7 +48,10 @@ async def test_greeting_service_rejects_wrong_command() -> None:
     command = Command(type=CommandType.GET_TIME)
 
     with pytest.raises(ValueError, match="cannot handle"):
-        await service.execute(command)
+        await service.execute(
+            command=command,
+            context=build_context(),
+        )
 
 
 def test_clock_service_declares_supported_command() -> None:
@@ -41,15 +61,15 @@ def test_clock_service_declares_supported_command() -> None:
 
 
 @pytest.mark.asyncio
-async def test_clock_service_returns_injected_time() -> None:
-    fixed_time = datetime(2026, 8, 1, 19, 30)
-
-    service = ClockService(
-        now_provider=lambda: fixed_time,
-    )
-
+async def test_clock_service_returns_context_time() -> None:
+    service = ClockService()
     command = Command(type=CommandType.GET_TIME)
-    response = await service.execute(command)
+    context = build_context(current_time=datetime(2026, 8, 1, 19, 30))
+
+    response = await service.execute(
+        command=command,
+        context=context,
+    )
 
     assert response.text == "The current time is 19:30."
 
@@ -60,4 +80,7 @@ async def test_clock_service_rejects_wrong_command() -> None:
     command = Command(type=CommandType.GREET)
 
     with pytest.raises(ValueError, match="cannot handle"):
-        await service.execute(command)
+        await service.execute(
+            command=command,
+            context=build_context(),
+        )
