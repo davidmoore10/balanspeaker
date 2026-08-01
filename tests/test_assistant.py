@@ -11,6 +11,8 @@ from services.base import Service
 
 
 class GreetingTestService(Service):
+    """A greeting service used in assistant tests."""
+
     @property
     def name(self) -> str:
         return "greeting-test"
@@ -24,6 +26,8 @@ class GreetingTestService(Service):
 
 
 class FailingTimeService(Service):
+    """A time service that deliberately raises an exception."""
+
     @property
     def name(self) -> str:
         return "failing-time"
@@ -39,6 +43,8 @@ class FailingTimeService(Service):
 def build_test_assistant(
     include_time_service: bool = False,
 ) -> Assistant:
+    """Build an assistant configured for tests."""
+
     registry = ServiceRegistry()
     registry.register(GreetingTestService())
 
@@ -68,6 +74,14 @@ def test_empty_assistant_name_is_rejected() -> None:
             parser=RuleBasedCommandParser(),
             name="   ",
         )
+
+
+def test_start_message_contains_assistant_name() -> None:
+    assistant = build_test_assistant()
+
+    response = assistant.start_message()
+
+    assert response.text == "Balanspeaker is ready. Type 'exit' to quit."
 
 
 @pytest.mark.asyncio
@@ -113,3 +127,21 @@ async def test_service_failure_returns_controlled_error() -> None:
     response = await assistant.handle_text("what time is it")
 
     assert response.text == ("Something went wrong while handling that request.")
+
+
+@pytest.mark.asyncio
+async def test_timer_without_registered_service_is_unavailable() -> None:
+    assistant = build_test_assistant()
+
+    response = await assistant.handle_text("timer 5")
+
+    assert response.text == "That capability is not currently available."
+
+
+@pytest.mark.asyncio
+async def test_timer_without_duration_returns_parser_error() -> None:
+    assistant = build_test_assistant()
+
+    response = await assistant.handle_text("set a timer")
+
+    assert response.text == "Please specify how long the timer should run."

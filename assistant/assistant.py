@@ -45,6 +45,9 @@ class Assistant:
 
         command = self._parser.parse(cleaned_text)
 
+        if command.error is not None:
+            return AssistantResponse(text=command.error.message)
+
         if command.type == CommandType.UNKNOWN:
             return AssistantResponse(text="I don't know how to handle that yet.")
 

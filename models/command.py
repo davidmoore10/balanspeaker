@@ -4,12 +4,15 @@ from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import Any
 
+from models.parser_error import ParserError
+
 
 class CommandType(StrEnum):
     """Actions understood by the assistant."""
 
     GREET = "greet"
     GET_TIME = "get_time"
+    START_TIMER = "start_timer"
     UNKNOWN = "unknown"
 
 
@@ -20,3 +23,4 @@ class Command:
     type: CommandType
     parameters: dict[str, Any] = field(default_factory=dict)
     original_text: str = ""
+    error: ParserError | None = None
