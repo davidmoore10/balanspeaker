@@ -5,6 +5,7 @@ from datetime import datetime
 from assistant.context import ApplicationContext
 from core.clock import FakeClock
 from core.event_bus import EventBus
+from domains.alarm.manager import AlarmManager
 from domains.timer.manager import TimerManager
 
 
@@ -15,7 +16,13 @@ def build_test_context(
 
     clock = FakeClock(current_time or datetime(2026, 8, 1, 20, 0))
     event_bus = EventBus()
+
     timer_manager = TimerManager(
+        clock=clock,
+        event_bus=event_bus,
+    )
+
+    alarm_manager = AlarmManager(
         clock=clock,
         event_bus=event_bus,
     )
@@ -24,4 +31,5 @@ def build_test_context(
         clock=clock,
         event_bus=event_bus,
         timer_manager=timer_manager,
+        alarm_manager=alarm_manager,
     )

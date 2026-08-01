@@ -14,6 +14,9 @@ class EventType(StrEnum):
     TIMER_FINISHED = "timer_finished"
     TIMER_CANCELLED = "timer_cancelled"
 
+    ALARM_STARTED = "alarm_started"
+    ALARM_STOPPED = "alarm_stopped"
+
 
 @dataclass(frozen=True, slots=True)
 class Event:

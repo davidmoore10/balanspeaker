@@ -29,8 +29,8 @@ class RuleBasedCommandParser(CommandParser):
 
     _TIME_REQUESTS = {
         "what time is it",
-        "what's the time",
         "what time it is",
+        "what's the time",
         "tell me the time",
         "current time",
         "time",
@@ -50,6 +50,19 @@ class RuleBasedCommandParser(CommandParser):
         "timers",
     }
 
+    _STOP_ALARM_REQUESTS = {
+        "stop alarm",
+        "stop the alarm",
+        "silence alarm",
+        "silence the alarm",
+        "turn off alarm",
+        "turn off the alarm",
+        "dismiss alarm",
+        "dismiss the alarm",
+        "stop ringing",
+        "stop the ringing",
+    }
+
     _TIMER_KEYWORDS = {
         "timer",
         "timers",
@@ -67,7 +80,7 @@ class RuleBasedCommandParser(CommandParser):
     )
 
     _CANCEL_TIMER_PATTERN = re.compile(
-        r"\b(?:cancel|stop|delete|remove)\s+"
+        r"\b(?:cancel|delete|remove)\s+"
         r"(?:(?:the|my)\s+)?"
         r"(?:(?P<name>[a-z][a-z0-9 _-]*?)\s+)?"
         r"timers?\b"
@@ -88,6 +101,12 @@ class RuleBasedCommandParser(CommandParser):
         if normalized_text in self._TIME_REQUESTS:
             return Command(
                 type=CommandType.GET_TIME,
+                original_text=original_text,
+            )
+
+        if normalized_text in self._STOP_ALARM_REQUESTS:
+            return Command(
+                type=CommandType.STOP_ALARM,
                 original_text=original_text,
             )
 

@@ -12,9 +12,13 @@ class CommandType(StrEnum):
 
     GREET = "greet"
     GET_TIME = "get_time"
+
     START_TIMER = "start_timer"
     LIST_TIMERS = "list_timers"
     CANCEL_TIMER = "cancel_timer"
+
+    STOP_ALARM = "stop_alarm"
+
     UNKNOWN = "unknown"
 
 

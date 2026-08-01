@@ -4,25 +4,36 @@ import asyncio
 
 from assistant.assistant import Assistant
 from assistant.context import ApplicationContext
-from assistant.event_handler import format_event_message
+from assistant.event_handler import handle_event
 from assistant.parser import RuleBasedCommandParser
 from assistant.registry import ServiceRegistry
 from core.clock import SystemClock
 from core.event_bus import EventBus
+from domains.alarm.manager import AlarmManager
 from domains.timer.manager import TimerManager
 from domains.timer.scheduler import TimerScheduler
+from services.alarm import AlarmService
 from services.clock import ClockService
 from services.greeting import GreetingService
 from services.timer import TimerService
 
 
-def build_application() -> tuple[Assistant, TimerScheduler, EventBus]:
+def build_application() -> tuple[
+    Assistant,
+    TimerScheduler,
+    ApplicationContext,
+]:
     """Create the assistant and its background infrastructure."""
 
     clock = SystemClock()
     event_bus = EventBus()
 
     timer_manager = TimerManager(
+        clock=clock,
+        event_bus=event_bus,
+    )
+
+    alarm_manager = AlarmManager(
         clock=clock,
         event_bus=event_bus,
     )
@@ -36,12 +47,14 @@ def build_application() -> tuple[Assistant, TimerScheduler, EventBus]:
         clock=clock,
         event_bus=event_bus,
         timer_manager=timer_manager,
+        alarm_manager=alarm_manager,
     )
 
     registry = ServiceRegistry()
     registry.register(GreetingService())
     registry.register(ClockService())
     registry.register(TimerService())
+    registry.register(AlarmService())
 
     assistant = Assistant(
         registry=registry,
@@ -50,7 +63,7 @@ def build_application() -> tuple[Assistant, TimerScheduler, EventBus]:
         name="Balanspeaker",
     )
 
-    return assistant, timer_scheduler, event_bus
+    return assistant, timer_scheduler, context
 
 
 async def read_user_input(prompt: str) -> str:
@@ -61,27 +74,30 @@ async def read_user_input(prompt: str) -> str:
 
 async def consume_events(
     *,
-    event_bus: EventBus,
+    context: ApplicationContext,
     assistant_name: str,
 ) -> None:
     """Continuously process application events."""
 
     while True:
-        event = await event_bus.get()
+        event = await context.event_bus.get()
 
         try:
-            message = format_event_message(event)
+            message = await handle_event(
+                event=event,
+                context=context,
+            )
 
             if message is not None:
                 print(f"\n{assistant_name}: {message}")
         finally:
-            event_bus.task_done()
+            context.event_bus.task_done()
 
 
 async def run_application() -> None:
     """Run the text-based development interface."""
 
-    assistant, timer_scheduler, event_bus = build_application()
+    assistant, timer_scheduler, context = build_application()
 
     scheduler_task = asyncio.create_task(
         timer_scheduler.run(),
@@ -90,7 +106,7 @@ async def run_application() -> None:
 
     event_consumer_task = asyncio.create_task(
         consume_events(
-            event_bus=event_bus,
+            context=context,
             assistant_name=assistant.name,
         ),
         name="event-consumer",
