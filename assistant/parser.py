@@ -63,6 +63,38 @@ class RuleBasedCommandParser(CommandParser):
         "stop the ringing",
     }
 
+    _PLAY_MEDIA_REQUESTS = {
+        "play music",
+        "play media",
+        "start music",
+        "start playing music",
+        "put some music on",
+    }
+
+    _PAUSE_MEDIA_REQUESTS = {
+        "pause music",
+        "pause media",
+        "pause the music",
+        "pause playback",
+    }
+
+    _RESUME_MEDIA_REQUESTS = {
+        "resume music",
+        "resume media",
+        "resume the music",
+        "continue music",
+        "continue playing",
+    }
+
+    _STOP_MEDIA_REQUESTS = {
+        "stop music",
+        "stop media",
+        "stop the music",
+        "stop playback",
+        "turn off music",
+        "turn off the music",
+    }
+
     _TIMER_KEYWORDS = {
         "timer",
         "timers",
@@ -110,6 +142,14 @@ class RuleBasedCommandParser(CommandParser):
                 original_text=original_text,
             )
 
+        media_command = self._parse_media_command(
+            normalized_text=normalized_text,
+            original_text=original_text,
+        )
+
+        if media_command is not None:
+            return media_command
+
         if self._is_cancel_timer_request(normalized_text):
             return self._parse_cancel_timer(
                 normalized_text=normalized_text,
@@ -132,6 +172,40 @@ class RuleBasedCommandParser(CommandParser):
             type=CommandType.UNKNOWN,
             original_text=original_text,
         )
+
+    def _parse_media_command(
+        self,
+        *,
+        normalized_text: str,
+        original_text: str,
+    ) -> Command | None:
+        """Parse a media playback command."""
+
+        if normalized_text in self._PLAY_MEDIA_REQUESTS:
+            return Command(
+                type=CommandType.PLAY_MEDIA,
+                original_text=original_text,
+            )
+
+        if normalized_text in self._PAUSE_MEDIA_REQUESTS:
+            return Command(
+                type=CommandType.PAUSE_MEDIA,
+                original_text=original_text,
+            )
+
+        if normalized_text in self._RESUME_MEDIA_REQUESTS:
+            return Command(
+                type=CommandType.RESUME_MEDIA,
+                original_text=original_text,
+            )
+
+        if normalized_text in self._STOP_MEDIA_REQUESTS:
+            return Command(
+                type=CommandType.STOP_MEDIA,
+                original_text=original_text,
+            )
+
+        return None
 
     def _parse_start_timer(
         self,

@@ -17,6 +17,7 @@ from domains.timer.scheduler import TimerScheduler
 from services.alarm import AlarmService
 from services.clock import ClockService
 from services.greeting import GreetingService
+from services.media import MediaService
 from services.timer import TimerService
 
 
@@ -64,6 +65,7 @@ def build_application() -> tuple[
     registry.register(ClockService())
     registry.register(TimerService())
     registry.register(AlarmService())
+    registry.register(MediaService())
 
     assistant = Assistant(
         registry=registry,

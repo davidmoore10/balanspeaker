@@ -19,6 +19,11 @@ class CommandType(StrEnum):
 
     STOP_ALARM = "stop_alarm"
 
+    PLAY_MEDIA = "play_media"
+    PAUSE_MEDIA = "pause_media"
+    RESUME_MEDIA = "resume_media"
+    STOP_MEDIA = "stop_media"
+
     UNKNOWN = "unknown"
 
 
