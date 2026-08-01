@@ -4,23 +4,10 @@ from datetime import datetime
 
 import pytest
 
-from assistant.context import ApplicationContext
-from core.clock import FakeClock
-from core.event_bus import EventBus
 from models.command import Command, CommandType
 from services.clock import ClockService
 from services.greeting import GreetingService
-
-
-def build_context(
-    current_time: datetime | None = None,
-) -> ApplicationContext:
-    """Create an application context for service tests."""
-
-    return ApplicationContext(
-        clock=FakeClock(current_time or datetime(2026, 8, 1, 20, 0)),
-        event_bus=EventBus(),
-    )
+from tests.helpers import build_test_context
 
 
 def test_greeting_service_declares_supported_command() -> None:
@@ -36,7 +23,7 @@ async def test_greeting_service_returns_response() -> None:
 
     response = await service.execute(
         command=command,
-        context=build_context(),
+        context=build_test_context(),
     )
 
     assert response.text == "Hello! How can I help?"
@@ -50,7 +37,7 @@ async def test_greeting_service_rejects_wrong_command() -> None:
     with pytest.raises(ValueError, match="cannot handle"):
         await service.execute(
             command=command,
-            context=build_context(),
+            context=build_test_context(),
         )
 
 
@@ -64,7 +51,8 @@ def test_clock_service_declares_supported_command() -> None:
 async def test_clock_service_returns_context_time() -> None:
     service = ClockService()
     command = Command(type=CommandType.GET_TIME)
-    context = build_context(current_time=datetime(2026, 8, 1, 19, 30))
+
+    context = build_test_context(current_time=datetime(2026, 8, 1, 19, 30))
 
     response = await service.execute(
         command=command,
@@ -82,5 +70,5 @@ async def test_clock_service_rejects_wrong_command() -> None:
     with pytest.raises(ValueError, match="cannot handle"):
         await service.execute(
             command=command,
-            context=build_context(),
+            context=build_test_context(),
         )

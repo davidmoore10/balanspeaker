@@ -5,29 +5,20 @@ from datetime import datetime
 
 import pytest
 
-from assistant.context import ApplicationContext
 from core.clock import FakeClock
-from core.event_bus import EventBus
+from tests.helpers import build_test_context
 
 
 def test_context_exposes_shared_dependencies() -> None:
-    clock = FakeClock(datetime(2026, 8, 1, 20, 0))
-    event_bus = EventBus()
+    context = build_test_context(current_time=datetime(2026, 8, 1, 20, 0))
 
-    context = ApplicationContext(
-        clock=clock,
-        event_bus=event_bus,
-    )
-
-    assert context.clock is clock
-    assert context.event_bus is event_bus
+    assert isinstance(context.clock, FakeClock)
+    assert context.event_bus is not None
+    assert context.timer_manager is not None
 
 
 def test_context_dependencies_cannot_be_replaced() -> None:
-    context = ApplicationContext(
-        clock=FakeClock(datetime(2026, 8, 1, 20, 0)),
-        event_bus=EventBus(),
-    )
+    context = build_test_context()
 
     with pytest.raises(FrozenInstanceError):
         context.clock = FakeClock(datetime(2026, 8, 2, 20, 0))

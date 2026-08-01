@@ -8,6 +8,7 @@ from assistant.parser import RuleBasedCommandParser
 from assistant.registry import ServiceRegistry
 from core.clock import SystemClock
 from core.event_bus import EventBus
+from domains.timer.manager import TimerManager
 from services.clock import ClockService
 from services.greeting import GreetingService
 
@@ -19,9 +20,18 @@ def build_assistant() -> Assistant:
     registry.register(GreetingService())
     registry.register(ClockService())
 
+    clock = SystemClock()
+    event_bus = EventBus()
+
+    timer_manager = TimerManager(
+        clock=clock,
+        event_bus=event_bus,
+    )
+
     context = ApplicationContext(
-        clock=SystemClock(),
-        event_bus=EventBus(),
+        clock=clock,
+        event_bus=event_bus,
+        timer_manager=timer_manager,
     )
 
     return Assistant(

@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 from core.clock import Clock
 from core.event_bus import EventBus
+from domains.timer.manager import TimerManager
 
 
 @dataclass(frozen=True, slots=True)
@@ -12,3 +13,4 @@ class ApplicationContext:
 
     clock: Clock
     event_bus: EventBus
+    timer_manager: TimerManager

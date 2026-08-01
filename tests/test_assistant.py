@@ -1,18 +1,15 @@
 """Tests for the core assistant."""
 
-from datetime import datetime
-
 import pytest
 
 from assistant.assistant import Assistant
 from assistant.context import ApplicationContext
 from assistant.parser import RuleBasedCommandParser
 from assistant.registry import ServiceRegistry
-from core.clock import FakeClock
-from core.event_bus import EventBus
 from models.command import Command, CommandType
 from models.response import AssistantResponse
 from services.base import Service
+from tests.helpers import build_test_context
 
 
 class GreetingTestService(Service):
@@ -20,10 +17,14 @@ class GreetingTestService(Service):
 
     @property
     def name(self) -> str:
+        """Return the service name."""
+
         return "greeting-test"
 
     @property
     def supported_commands(self) -> frozenset[CommandType]:
+        """Return supported command types."""
+
         return frozenset({CommandType.GREET})
 
     async def execute(
@@ -31,6 +32,8 @@ class GreetingTestService(Service):
         command: Command,
         context: ApplicationContext,
     ) -> AssistantResponse:
+        """Return a successful test response."""
+
         return AssistantResponse(text="Handled greeting.")
 
 
@@ -39,10 +42,14 @@ class FailingTimeService(Service):
 
     @property
     def name(self) -> str:
+        """Return the service name."""
+
         return "failing-time"
 
     @property
     def supported_commands(self) -> frozenset[CommandType]:
+        """Return supported command types."""
+
         return frozenset({CommandType.GET_TIME})
 
     async def execute(
@@ -50,16 +57,9 @@ class FailingTimeService(Service):
         command: Command,
         context: ApplicationContext,
     ) -> AssistantResponse:
+        """Simulate a service failure."""
+
         raise RuntimeError("Simulated service failure")
-
-
-def build_context() -> ApplicationContext:
-    """Create a test application context."""
-
-    return ApplicationContext(
-        clock=FakeClock(datetime(2026, 8, 1, 20, 0)),
-        event_bus=EventBus(),
-    )
 
 
 def build_test_assistant(
@@ -76,32 +76,38 @@ def build_test_assistant(
     return Assistant(
         registry=registry,
         parser=RuleBasedCommandParser(),
-        context=build_context(),
+        context=build_test_context(),
         name="Balanspeaker",
     )
 
 
 def test_default_assistant_name() -> None:
+    """The default assistant name should be Balanspeaker."""
+
     assistant = Assistant(
         registry=ServiceRegistry(),
         parser=RuleBasedCommandParser(),
-        context=build_context(),
+        context=build_test_context(),
     )
 
     assert assistant.name == "Balanspeaker"
 
 
 def test_empty_assistant_name_is_rejected() -> None:
+    """Blank assistant names should be rejected."""
+
     with pytest.raises(ValueError, match="Assistant name cannot be empty"):
         Assistant(
             registry=ServiceRegistry(),
             parser=RuleBasedCommandParser(),
-            context=build_context(),
+            context=build_test_context(),
             name="   ",
         )
 
 
 def test_start_message_contains_assistant_name() -> None:
+    """The startup message should include the assistant name."""
+
     assistant = build_test_assistant()
 
     response = assistant.start_message()
@@ -111,6 +117,8 @@ def test_start_message_contains_assistant_name() -> None:
 
 @pytest.mark.asyncio
 async def test_handle_text_executes_matching_command() -> None:
+    """A recognised command should be routed to its service."""
+
     assistant = build_test_assistant()
 
     response = await assistant.handle_text("hello")
@@ -120,6 +128,8 @@ async def test_handle_text_executes_matching_command() -> None:
 
 @pytest.mark.asyncio
 async def test_handle_empty_text_returns_prompt() -> None:
+    """Blank input should produce a prompt rather than a service call."""
+
     assistant = build_test_assistant()
 
     response = await assistant.handle_text("   ")
@@ -129,6 +139,8 @@ async def test_handle_empty_text_returns_prompt() -> None:
 
 @pytest.mark.asyncio
 async def test_unknown_request_returns_fallback() -> None:
+    """Unsupported text should return the unknown-request response."""
+
     assistant = build_test_assistant()
 
     response = await assistant.handle_text("play some music")
@@ -138,6 +150,8 @@ async def test_unknown_request_returns_fallback() -> None:
 
 @pytest.mark.asyncio
 async def test_known_command_without_service_returns_unavailable() -> None:
+    """A parsed command without a registered service should be unavailable."""
+
     assistant = build_test_assistant()
 
     response = await assistant.handle_text("what time is it")
@@ -147,6 +161,8 @@ async def test_known_command_without_service_returns_unavailable() -> None:
 
 @pytest.mark.asyncio
 async def test_service_failure_returns_controlled_error() -> None:
+    """A service exception should not crash the assistant."""
+
     assistant = build_test_assistant(include_time_service=True)
 
     response = await assistant.handle_text("what time is it")
@@ -156,6 +172,8 @@ async def test_service_failure_returns_controlled_error() -> None:
 
 @pytest.mark.asyncio
 async def test_timer_without_registered_service_is_unavailable() -> None:
+    """A valid timer command should be unavailable before service registration."""
+
     assistant = build_test_assistant()
 
     response = await assistant.handle_text("timer 5")
@@ -165,6 +183,8 @@ async def test_timer_without_registered_service_is_unavailable() -> None:
 
 @pytest.mark.asyncio
 async def test_timer_without_duration_returns_parser_error() -> None:
+    """An incomplete timer command should return a parser validation error."""
+
     assistant = build_test_assistant()
 
     response = await assistant.handle_text("set a timer")
