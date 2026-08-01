@@ -1,15 +1,18 @@
 """Core assistant application."""
 
+from assistant.parser import CommandParser
 from assistant.registry import ServiceRegistry
+from models.command import CommandType
 from models.response import AssistantResponse
 
 
 class Assistant:
-    """Coordinates user requests and registered services."""
+    """Parse requests and dispatch commands to services."""
 
     def __init__(
         self,
         registry: ServiceRegistry,
+        parser: CommandParser,
         name: str = "Balanspeaker",
     ) -> None:
         cleaned_name = name.strip()
@@ -19,6 +22,7 @@ class Assistant:
 
         self._name = cleaned_name
         self._registry = registry
+        self._parser = parser
 
     @property
     def name(self) -> str:
@@ -27,25 +31,30 @@ class Assistant:
         return self._name
 
     def start_message(self) -> AssistantResponse:
-        """Return the message shown when the assistant starts."""
+        """Return the application start message."""
 
         return AssistantResponse(text=f"{self._name} is ready. Type 'exit' to quit.")
 
     async def handle_text(self, user_text: str) -> AssistantResponse:
-        """Route user text to an appropriate registered service."""
+        """Parse user text and execute the resulting command."""
 
         cleaned_text = user_text.strip()
 
         if not cleaned_text:
             return AssistantResponse(text="Please enter a command.")
 
-        service = self._registry.find_handler(cleaned_text)
+        command = self._parser.parse(cleaned_text)
 
-        if service is None:
+        if command.type == CommandType.UNKNOWN:
             return AssistantResponse(text="I don't know how to handle that yet.")
 
+        service = self._registry.find_handler(command.type)
+
+        if service is None:
+            return AssistantResponse(text="That capability is not currently available.")
+
         try:
-            return await service.execute(cleaned_text)
+            return await service.execute(command)
         except Exception:
             return AssistantResponse(
                 text="Something went wrong while handling that request."

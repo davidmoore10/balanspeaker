@@ -2,6 +2,7 @@
 
 from abc import ABC, abstractmethod
 
+from models.command import Command, CommandType
 from models.response import AssistantResponse
 
 
@@ -13,10 +14,11 @@ class Service(ABC):
     def name(self) -> str:
         """Return the unique service name."""
 
+    @property
     @abstractmethod
-    def can_handle(self, user_text: str) -> bool:
-        """Return whether this service can handle the user's request."""
+    def supported_commands(self) -> frozenset[CommandType]:
+        """Return the command types handled by this service."""
 
     @abstractmethod
-    async def execute(self, user_text: str) -> AssistantResponse:
-        """Execute a request and return the assistant's response."""
+    async def execute(self, command: Command) -> AssistantResponse:
+        """Execute a structured command."""

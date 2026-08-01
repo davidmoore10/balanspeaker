@@ -1,20 +1,12 @@
-"""A simple greeting service."""
+"""Service for greeting the user."""
 
+from models.command import Command, CommandType
 from models.response import AssistantResponse
 from services.base import Service
 
 
 class GreetingService(Service):
-    """Handles basic greetings."""
-
-    _GREETINGS = {
-        "hello",
-        "hi",
-        "hey",
-        "good morning",
-        "good afternoon",
-        "good evening",
-    }
+    """Handle greeting commands."""
 
     @property
     def name(self) -> str:
@@ -22,13 +14,16 @@ class GreetingService(Service):
 
         return "greeting"
 
-    def can_handle(self, user_text: str) -> bool:
-        """Return whether the input is a recognised greeting."""
+    @property
+    def supported_commands(self) -> frozenset[CommandType]:
+        """Return supported command types."""
 
-        normalized_text = user_text.strip().lower()
-        return normalized_text in self._GREETINGS
+        return frozenset({CommandType.GREET})
 
-    async def execute(self, user_text: str) -> AssistantResponse:
+    async def execute(self, command: Command) -> AssistantResponse:
         """Return a greeting response."""
+
+        if command.type not in self.supported_commands:
+            raise ValueError(f"{self.name} cannot handle command '{command.type}'.")
 
         return AssistantResponse(text="Hello! How can I help?")

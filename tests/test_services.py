@@ -4,64 +4,40 @@ from datetime import datetime
 
 import pytest
 
+from models.command import Command, CommandType
 from services.clock import ClockService
 from services.greeting import GreetingService
 
 
-@pytest.mark.parametrize(
-    "user_text",
-    [
-        "hello",
-        "Hi",
-        "  hey  ",
-        "good morning",
-    ],
-)
-def test_greeting_service_recognises_supported_greetings(
-    user_text: str,
-) -> None:
+def test_greeting_service_declares_supported_command() -> None:
     service = GreetingService()
 
-    assert service.can_handle(user_text)
-
-
-def test_greeting_service_does_not_steal_longer_request() -> None:
-    service = GreetingService()
-
-    assert not service.can_handle("hello, what time is it?")
+    assert service.supported_commands == frozenset({CommandType.GREET})
 
 
 @pytest.mark.asyncio
 async def test_greeting_service_returns_response() -> None:
     service = GreetingService()
+    command = Command(type=CommandType.GREET)
 
-    response = await service.execute("hello")
+    response = await service.execute(command)
 
     assert response.text == "Hello! How can I help?"
 
 
-@pytest.mark.parametrize(
-    "user_text",
-    [
-        "what time is it",
-        "What's the time?",
-        "tell me the time",
-        "current time",
-        "TIME",
-    ],
-)
-def test_clock_service_recognises_time_requests(
-    user_text: str,
-) -> None:
+@pytest.mark.asyncio
+async def test_greeting_service_rejects_wrong_command() -> None:
+    service = GreetingService()
+    command = Command(type=CommandType.GET_TIME)
+
+    with pytest.raises(ValueError, match="cannot handle"):
+        await service.execute(command)
+
+
+def test_clock_service_declares_supported_command() -> None:
     service = ClockService()
 
-    assert service.can_handle(user_text)
-
-
-def test_clock_service_does_not_match_timer() -> None:
-    service = ClockService()
-
-    assert not service.can_handle("timer 5")
+    assert service.supported_commands == frozenset({CommandType.GET_TIME})
 
 
 @pytest.mark.asyncio
@@ -72,6 +48,16 @@ async def test_clock_service_returns_injected_time() -> None:
         now_provider=lambda: fixed_time,
     )
 
-    response = await service.execute("what time is it")
+    command = Command(type=CommandType.GET_TIME)
+    response = await service.execute(command)
 
     assert response.text == "The current time is 19:30."
+
+
+@pytest.mark.asyncio
+async def test_clock_service_rejects_wrong_command() -> None:
+    service = ClockService()
+    command = Command(type=CommandType.GREET)
+
+    with pytest.raises(ValueError, match="cannot handle"):
+        await service.execute(command)

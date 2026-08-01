@@ -3,6 +3,7 @@
 import asyncio
 
 from assistant.assistant import Assistant
+from assistant.parser import RuleBasedCommandParser
 from assistant.registry import ServiceRegistry
 from services.clock import ClockService
 from services.greeting import GreetingService
@@ -12,12 +13,14 @@ def build_assistant() -> Assistant:
     """Create the assistant and register its services."""
 
     registry = ServiceRegistry()
-
     registry.register(GreetingService())
     registry.register(ClockService())
 
+    parser = RuleBasedCommandParser()
+
     return Assistant(
         registry=registry,
+        parser=parser,
         name="Balanspeaker",
     )
 
@@ -51,7 +54,7 @@ async def run_application() -> None:
 
 
 def main() -> None:
-    """Start the asynchronous application."""
+    """Start the application."""
 
     asyncio.run(run_application())
 

@@ -3,20 +3,13 @@
 from collections.abc import Callable
 from datetime import datetime
 
+from models.command import Command, CommandType
 from models.response import AssistantResponse
 from services.base import Service
 
 
 class ClockService(Service):
-    """Handles requests for the current time."""
-
-    _SUPPORTED_PHRASES = {
-        "what time is it",
-        "what's the time",
-        "tell me the time",
-        "current time",
-        "time",
-    }
+    """Handle current-time commands."""
 
     def __init__(
         self,
@@ -30,14 +23,17 @@ class ClockService(Service):
 
         return "clock"
 
-    def can_handle(self, user_text: str) -> bool:
-        """Return whether the user is asking for the current time."""
+    @property
+    def supported_commands(self) -> frozenset[CommandType]:
+        """Return supported command types."""
 
-        normalized_text = user_text.strip().lower().rstrip("?.!")
-        return normalized_text in self._SUPPORTED_PHRASES
+        return frozenset({CommandType.GET_TIME})
 
-    async def execute(self, user_text: str) -> AssistantResponse:
+    async def execute(self, command: Command) -> AssistantResponse:
         """Return the current local time."""
+
+        if command.type not in self.supported_commands:
+            raise ValueError(f"{self.name} cannot handle command '{command.type}'.")
 
         current_time = self._now_provider()
 

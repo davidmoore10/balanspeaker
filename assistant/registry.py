@@ -1,5 +1,6 @@
 """Registration and selection of assistant services."""
 
+from models.command import CommandType
 from services.base import Service
 
 
@@ -7,14 +8,19 @@ class DuplicateServiceError(ValueError):
     """Raised when two services use the same name."""
 
 
+class DuplicateCommandHandlerError(ValueError):
+    """Raised when two services handle the same command type."""
+
+
 class ServiceRegistry:
-    """Stores services and selects one for each user request."""
+    """Store services and map command types to handlers."""
 
     def __init__(self) -> None:
         self._services: dict[str, Service] = {}
+        self._command_handlers: dict[CommandType, Service] = {}
 
     def register(self, service: Service) -> None:
-        """Register a service by its unique name."""
+        """Register a service and its supported command types."""
 
         service_name = service.name.strip().lower()
 
@@ -26,16 +32,24 @@ class ServiceRegistry:
                 f"A service named '{service_name}' is already registered."
             )
 
+        for command_type in service.supported_commands:
+            existing_handler = self._command_handlers.get(command_type)
+
+            if existing_handler is not None:
+                raise DuplicateCommandHandlerError(
+                    f"Command '{command_type}' is already handled by "
+                    f"'{existing_handler.name}'."
+                )
+
         self._services[service_name] = service
 
-    def find_handler(self, user_text: str) -> Service | None:
-        """Return the first service able to handle the request."""
+        for command_type in service.supported_commands:
+            self._command_handlers[command_type] = service
 
-        for service in self._services.values():
-            if service.can_handle(user_text):
-                return service
+    def find_handler(self, command_type: CommandType) -> Service | None:
+        """Return the service registered for a command type."""
 
-        return None
+        return self._command_handlers.get(command_type)
 
     def get(self, service_name: str) -> Service | None:
         """Return a service by name."""
@@ -45,7 +59,7 @@ class ServiceRegistry:
 
     @property
     def service_names(self) -> tuple[str, ...]:
-        """Return registered service names in registration order."""
+        """Return registered service names."""
 
         return tuple(self._services.keys())
 

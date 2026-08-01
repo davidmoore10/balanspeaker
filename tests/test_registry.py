@@ -1,43 +1,51 @@
-"""Tests for service registration and selection."""
+"""Tests for service registration and command routing."""
 
 import pytest
 
-from assistant.registry import DuplicateServiceError, ServiceRegistry
+from assistant.registry import (
+    DuplicateCommandHandlerError,
+    DuplicateServiceError,
+    ServiceRegistry,
+)
+from models.command import Command, CommandType
 from models.response import AssistantResponse
 from services.base import Service
 
 
-class FirstService(Service):
+class GreetingTestService(Service):
     @property
     def name(self) -> str:
-        return "first"
+        return "greeting-test"
 
-    def can_handle(self, user_text: str) -> bool:
-        return user_text == "shared request"
+    @property
+    def supported_commands(self) -> frozenset[CommandType]:
+        return frozenset({CommandType.GREET})
 
-    async def execute(self, user_text: str) -> AssistantResponse:
-        return AssistantResponse(text="First service")
+    async def execute(self, command: Command) -> AssistantResponse:
+        return AssistantResponse(text="Hello")
 
 
-class SecondService(Service):
+class DuplicateNameService(GreetingTestService):
     @property
     def name(self) -> str:
-        return "second"
+        return "GREETING-TEST"
 
-    def can_handle(self, user_text: str) -> bool:
-        return user_text in {"shared request", "second request"}
-
-    async def execute(self, user_text: str) -> AssistantResponse:
-        return AssistantResponse(text="Second service")
+    @property
+    def supported_commands(self) -> frozenset[CommandType]:
+        return frozenset({CommandType.GET_TIME})
 
 
-class DuplicateFirstService(FirstService):
+class DuplicateCommandService(GreetingTestService):
     @property
     def name(self) -> str:
-        return "FIRST"
+        return "another-greeting"
+
+    @property
+    def supported_commands(self) -> frozenset[CommandType]:
+        return frozenset({CommandType.GREET})
 
 
-class EmptyNameService(FirstService):
+class EmptyNameService(GreetingTestService):
     @property
     def name(self) -> str:
         return "   "
@@ -45,33 +53,53 @@ class EmptyNameService(FirstService):
 
 def test_register_adds_service() -> None:
     registry = ServiceRegistry()
-    service = FirstService()
+    service = GreetingTestService()
 
     registry.register(service)
 
     assert len(registry) == 1
-    assert registry.get("first") is service
-    assert registry.service_names == ("first",)
+    assert registry.get("greeting-test") is service
+    assert registry.service_names == ("greeting-test",)
 
 
-def test_service_lookup_is_case_insensitive() -> None:
+def test_find_handler_returns_service_for_command() -> None:
     registry = ServiceRegistry()
-    service = FirstService()
+    service = GreetingTestService()
     registry.register(service)
 
-    assert registry.get("FIRST") is service
-    assert registry.get("  First  ") is service
+    handler = registry.find_handler(CommandType.GREET)
+
+    assert handler is service
+
+
+def test_find_handler_returns_none_without_registration() -> None:
+    registry = ServiceRegistry()
+
+    handler = registry.find_handler(CommandType.GET_TIME)
+
+    assert handler is None
 
 
 def test_duplicate_service_name_is_rejected() -> None:
     registry = ServiceRegistry()
-    registry.register(FirstService())
+    registry.register(GreetingTestService())
 
     with pytest.raises(
         DuplicateServiceError,
         match="already registered",
     ):
-        registry.register(DuplicateFirstService())
+        registry.register(DuplicateNameService())
+
+
+def test_duplicate_command_handler_is_rejected() -> None:
+    registry = ServiceRegistry()
+    registry.register(GreetingTestService())
+
+    with pytest.raises(
+        DuplicateCommandHandlerError,
+        match="already handled",
+    ):
+        registry.register(DuplicateCommandService())
 
 
 def test_empty_service_name_is_rejected() -> None:
@@ -82,32 +110,3 @@ def test_empty_service_name_is_rejected() -> None:
         match="Service name cannot be empty",
     ):
         registry.register(EmptyNameService())
-
-
-def test_find_handler_returns_matching_service() -> None:
-    registry = ServiceRegistry()
-    first_service = FirstService()
-    second_service = SecondService()
-
-    registry.register(first_service)
-    registry.register(second_service)
-
-    assert registry.find_handler("second request") is second_service
-
-
-def test_find_handler_uses_registration_order() -> None:
-    registry = ServiceRegistry()
-    first_service = FirstService()
-    second_service = SecondService()
-
-    registry.register(first_service)
-    registry.register(second_service)
-
-    assert registry.find_handler("shared request") is first_service
-
-
-def test_find_handler_returns_none_without_match() -> None:
-    registry = ServiceRegistry()
-    registry.register(FirstService())
-
-    assert registry.find_handler("unhandled request") is None
