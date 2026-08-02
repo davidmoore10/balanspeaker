@@ -33,7 +33,6 @@ class Settings:
 
     microphone_sample_rate: int = 16000
     microphone_device: int | str | None = None
-
     microphone_block_seconds: float = 0.1
     microphone_speech_threshold: float = 0.015
     microphone_silence_seconds: float = 1.0
@@ -41,6 +40,15 @@ class Settings:
     microphone_maximum_recording_seconds: float = 20.0
     microphone_minimum_speech_seconds: float = 0.2
     microphone_pre_roll_seconds: float = 0.3
+
+    wake_word_enabled: bool = True
+    wake_word_microphone_device: int | str | None = None
+    wake_word_provider: str = "hybrid"
+    wake_word_model: str = "hey_jarvis"
+    wake_word_threshold: float = 0.5
+    wake_word_vad_threshold: float = 0.0
+    wake_word_frame_seconds: float = 0.08
+    wake_word_cooldown_seconds: float = 2.0
 
 
 def load_settings() -> Settings:
@@ -63,7 +71,7 @@ def load_settings() -> Settings:
     )
 
     openai_max_output_tokens = _read_positive_int(
-        name=("BALANSPEAKER_OPENAI_MAX_OUTPUT_TOKENS"),
+        name="BALANSPEAKER_OPENAI_MAX_OUTPUT_TOKENS",
         default=500,
     )
 
@@ -151,20 +159,7 @@ def load_settings() -> Settings:
         default=16000,
     )
 
-    microphone_device_text = os.getenv(
-        "BALANSPEAKER_MICROPHONE_DEVICE",
-        "",
-    ).strip()
-
-    microphone_device: int | str | None
-
-    if not microphone_device_text:
-        microphone_device = None
-    else:
-        try:
-            microphone_device = int(microphone_device_text)
-        except ValueError:
-            microphone_device = microphone_device_text
+    microphone_device = _read_device("BALANSPEAKER_MICROPHONE_DEVICE")
 
     microphone_block_seconds = _read_positive_float(
         name="BALANSPEAKER_MICROPHONE_BLOCK_SECONDS",
@@ -172,12 +167,12 @@ def load_settings() -> Settings:
     )
 
     microphone_speech_threshold = _read_positive_float(
-        name=("BALANSPEAKER_MICROPHONE_SPEECH_THRESHOLD"),
+        name="BALANSPEAKER_MICROPHONE_SPEECH_THRESHOLD",
         default=0.015,
     )
 
     microphone_silence_seconds = _read_positive_float(
-        name=("BALANSPEAKER_MICROPHONE_SILENCE_SECONDS"),
+        name="BALANSPEAKER_MICROPHONE_SILENCE_SECONDS",
         default=1.0,
     )
 
@@ -199,6 +194,48 @@ def load_settings() -> Settings:
     microphone_pre_roll_seconds = _read_non_negative_float(
         name=("BALANSPEAKER_MICROPHONE_PRE_ROLL_SECONDS"),
         default=0.3,
+    )
+
+    wake_word_enabled = _read_bool(
+        name="BALANSPEAKER_WAKE_WORD_ENABLED",
+        default=True,
+    )
+
+    wake_word_microphone_device = _read_device(
+        "BALANSPEAKER_WAKE_WORD_MICROPHONE_DEVICE"
+    )
+
+    wake_word_provider = _read_choice(
+        name="BALANSPEAKER_WAKE_WORD_PROVIDER",
+        default="hybrid",
+        choices={"hybrid", "openwakeword"},
+    )
+
+    wake_word_model = _read_non_empty(
+        name="BALANSPEAKER_WAKE_WORD_MODEL",
+        default="hey_jarvis",
+    ).lower()
+
+    wake_word_threshold = _read_probability(
+        name="BALANSPEAKER_WAKE_WORD_THRESHOLD",
+        default=0.5,
+        allow_zero=False,
+    )
+
+    wake_word_vad_threshold = _read_probability(
+        name="BALANSPEAKER_WAKE_WORD_VAD_THRESHOLD",
+        default=0.0,
+        allow_zero=True,
+    )
+
+    wake_word_frame_seconds = _read_positive_float(
+        name="BALANSPEAKER_WAKE_WORD_FRAME_SECONDS",
+        default=0.08,
+    )
+
+    wake_word_cooldown_seconds = _read_non_negative_float(
+        name=("BALANSPEAKER_WAKE_WORD_COOLDOWN_SECONDS"),
+        default=2.0,
     )
 
     return Settings(
@@ -228,6 +265,14 @@ def load_settings() -> Settings:
         microphone_maximum_recording_seconds=(microphone_maximum_recording_seconds),
         microphone_minimum_speech_seconds=(microphone_minimum_speech_seconds),
         microphone_pre_roll_seconds=(microphone_pre_roll_seconds),
+        wake_word_enabled=wake_word_enabled,
+        wake_word_microphone_device=(wake_word_microphone_device),
+        wake_word_provider=wake_word_provider,
+        wake_word_model=wake_word_model,
+        wake_word_threshold=wake_word_threshold,
+        wake_word_vad_threshold=(wake_word_vad_threshold),
+        wake_word_frame_seconds=(wake_word_frame_seconds),
+        wake_word_cooldown_seconds=(wake_word_cooldown_seconds),
     )
 
 
@@ -271,10 +316,13 @@ def _read_float(
 ) -> float:
     """Read a floating-point environment value."""
 
-    value = os.getenv(name, str(default)).strip()
+    raw_value = os.getenv(
+        name,
+        str(default),
+    ).strip()
 
     try:
-        return float(value)
+        return float(raw_value)
     except ValueError as error:
         raise ValueError(f"{name} must be numeric.") from error
 
@@ -336,3 +384,79 @@ def _read_positive_int(
         raise ValueError(f"{name} must be greater than zero.")
 
     return value
+
+
+def _read_bool(
+    *,
+    name: str,
+    default: bool,
+) -> bool:
+    """Read a boolean environment value."""
+
+    default_text = "true" if default else "false"
+
+    raw_value = (
+        os.getenv(
+            name,
+            default_text,
+        )
+        .strip()
+        .lower()
+    )
+
+    if raw_value in {
+        "1",
+        "true",
+        "yes",
+        "on",
+    }:
+        return True
+
+    if raw_value in {
+        "0",
+        "false",
+        "no",
+        "off",
+    }:
+        return False
+
+    raise ValueError(f"{name} must be true or false.")
+
+
+def _read_probability(
+    *,
+    name: str,
+    default: float,
+    allow_zero: bool,
+) -> float:
+    """Read a value constrained to the zero-to-one range."""
+
+    value = _read_float(
+        name=name,
+        default=default,
+    )
+
+    minimum_valid = value >= 0 if allow_zero else value > 0
+
+    if not minimum_valid or value > 1:
+        lower_text = "zero" if allow_zero else "greater than zero"
+
+        raise ValueError(f"{name} must be {lower_text} and no greater than one.")
+
+    return value
+
+
+def _read_device(
+    name: str,
+) -> int | str | None:
+    """Read an optional microphone device."""
+
+    raw_value = os.getenv(name, "").strip()
+
+    if not raw_value:
+        return None
+
+    try:
+        return int(raw_value)
+    except ValueError:
+        return raw_value

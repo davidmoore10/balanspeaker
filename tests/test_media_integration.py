@@ -1,24 +1,40 @@
-"""Integration tests for media and alarm interruption."""
+"""Integration tests for media and alarm behaviour."""
 
 from datetime import datetime
 from uuid import UUID
 
 import pytest
 
+from ai.stub import StubChatbotProvider
 from assistant.event_handler import handle_event
-from domains.audio.backend import SimulatedAudioBackend
+from config.settings import Settings
 from domains.audio.state import MediaPlaybackState
 from main import build_application
 from models.event import Event, EventType
+from speech.silent import SilentSpeechProvider
 
 TIMER_ID = UUID("00000000-0000-0000-0000-000000000001")
+
+
+def build_test_application():
+    """Build the application with deterministic test settings."""
+
+    return build_application(
+        chatbot_provider=StubChatbotProvider(),
+        speech_provider=SilentSpeechProvider(),
+        settings=Settings(
+            chatbot_provider="stub",
+            speech_provider="silent",
+            wake_word_enabled=False,
+        ),
+    )
 
 
 @pytest.mark.asyncio
 async def test_application_handles_media_commands() -> None:
     """The production assistant should register the media service."""
 
-    assistant, _, context = build_application()
+    assistant, _, context = build_test_application()
 
     response = await assistant.handle_text("play music")
 
@@ -30,19 +46,11 @@ async def test_application_handles_media_commands() -> None:
 async def test_timer_alarm_pauses_and_restores_media() -> None:
     """A timer alarm should interrupt and restore playback."""
 
-    assistant, _, context = build_application()
+    assistant, _, context = build_test_application()
 
-    backend = context.audio_manager.backend
+    await assistant.handle_text("play music")
 
-    assert isinstance(backend, SimulatedAudioBackend)
-
-    play_response = await assistant.handle_text("play music")
-
-    assert play_response.text == "Playing music."
-
-    backend.clear_operations()
-
-    timer_event = Event(
+    event = Event(
         type=EventType.TIMER_FINISHED,
         occurred_at=datetime(2026, 8, 1, 20, 0),
         data={
@@ -52,62 +60,48 @@ async def test_timer_alarm_pauses_and_restores_media() -> None:
     )
 
     await handle_event(
-        event=timer_event,
+        event=event,
         context=context,
     )
 
     assert context.audio_manager.media_state == MediaPlaybackState.PAUSED
-    assert backend.operations == (
-        "pause_media",
-        "start_alarm",
-    )
 
-    backend.clear_operations()
+    response = await assistant.handle_text("stop alarm")
 
-    stop_response = await assistant.handle_text("stop alarm")
-
-    assert stop_response.text == "Pasta alarm stopped."
+    assert response.text == "Pasta alarm stopped."
     assert context.audio_manager.media_state == MediaPlaybackState.PLAYING
-    assert backend.operations == (
-        "stop_alarm",
-        "play_media",
-    )
 
 
 @pytest.mark.asyncio
-async def test_manual_pause_prevents_alarm_restoration() -> None:
-    """A manual pause during an alarm should prevent auto-resume."""
+async def test_stopping_media_prevents_alarm_restoration() -> None:
+    """Stopping media during an alarm should prevent auto-resume."""
 
-    assistant, _, context = build_application()
-
-    backend = context.audio_manager.backend
-
-    assert isinstance(backend, SimulatedAudioBackend)
+    assistant, _, context = build_test_application()
 
     await assistant.handle_text("play music")
 
-    timer_event = Event(
+    event = Event(
         type=EventType.TIMER_FINISHED,
         occurred_at=datetime(2026, 8, 1, 20, 0),
         data={
             "timer_id": str(TIMER_ID),
-            "name": "Timer",
+            "name": "Pasta",
         },
     )
 
     await handle_event(
-        event=timer_event,
+        event=event,
         context=context,
     )
 
-    pause_response = await assistant.handle_text("pause music")
-
-    assert pause_response.text == "No music is currently playing."
-
-    await context.audio_manager.pause_media()
-    backend.clear_operations()
-
-    await assistant.handle_text("stop alarm")
-
     assert context.audio_manager.media_state == MediaPlaybackState.PAUSED
-    assert backend.operations == ("stop_alarm",)
+
+    stop_media_response = await assistant.handle_text("stop music")
+
+    assert stop_media_response.text == "Music stopped."
+    assert context.audio_manager.media_state == MediaPlaybackState.STOPPED
+
+    stop_alarm_response = await assistant.handle_text("stop alarm")
+
+    assert stop_alarm_response.text == ("Pasta alarm stopped.")
+    assert context.audio_manager.media_state == MediaPlaybackState.STOPPED

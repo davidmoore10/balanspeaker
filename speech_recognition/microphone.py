@@ -21,6 +21,7 @@ from speech_recognition.silence import (
     SilenceDetectionSettings,
     SpeechActivityDetector,
 )
+from wake_word.listener import create_input_stream
 
 InputFunction = Callable[[str], str]
 
@@ -41,14 +42,6 @@ class RecordedAudio:
 
     samples: NDArray[np.float32]
     sample_rate: int
-
-
-def create_input_stream(
-    **kwargs: Any,
-) -> AbstractContextManager[Any]:
-    """Create the production sounddevice input stream."""
-
-    return sd.InputStream(**kwargs)
 
 
 class MicrophoneRecorder:

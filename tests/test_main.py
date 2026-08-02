@@ -5,6 +5,7 @@ from uuid import UUID
 import pytest
 
 from ai.stub import StubChatbotProvider
+from config.settings import Settings
 from main import build_application
 from speech.silent import SilentSpeechProvider
 
@@ -12,11 +13,16 @@ TEST_TIMER_ID = UUID("00000000-0000-0000-0000-000000000001")
 
 
 def build_test_application():
-    """Build the application with deterministic external providers."""
+    """Build the application with deterministic test settings."""
 
     return build_application(
         chatbot_provider=StubChatbotProvider(),
         speech_provider=SilentSpeechProvider(),
+        settings=Settings(
+            chatbot_provider="stub",
+            speech_provider="silent",
+            wake_word_enabled=False,
+        ),
     )
 
 

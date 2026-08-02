@@ -1,6 +1,7 @@
 """Command-line entry point for the smart speaker."""
 
 import asyncio
+import traceback
 
 from ai.factory import build_chatbot_provider
 from ai.inspection import find_openai_provider
@@ -41,6 +42,8 @@ from speech_recognition.microphone import (
     list_input_devices,
 )
 from speech_recognition.provider import SpeechToTextProvider
+from wake_word.factory import build_wake_word_listener
+from wake_word.listener import WakeWordListener
 
 
 def build_application(
@@ -83,24 +86,32 @@ def build_application(
 
     interaction_manager = InteractionManager()
 
-    configured_chatbot_provider = chatbot_provider or build_chatbot_provider(
-        application_settings
+    configured_chatbot_provider = (
+        chatbot_provider
+        or build_chatbot_provider(application_settings)
     )
 
-    configured_speech_provider = speech_provider or build_speech_provider(
-        application_settings
+    configured_speech_provider = (
+        speech_provider
+        or build_speech_provider(application_settings)
     )
 
     speech_manager = SpeechManager(
         provider=configured_speech_provider,
     )
 
-    configured_stt_provider = speech_to_text_provider or build_speech_to_text_provider(
-        application_settings
+    configured_stt_provider = (
+        speech_to_text_provider
+        or build_speech_to_text_provider(
+            application_settings
+        )
     )
 
-    configured_microphone = microphone_recorder or build_microphone_recorder(
-        application_settings
+    configured_microphone = (
+        microphone_recorder
+        or build_microphone_recorder(
+            application_settings
+        )
     )
 
     timer_scheduler = TimerScheduler(
@@ -173,18 +184,34 @@ async def capture_voice_command(
 
     try:
         if manual:
-            recorded_audio = await context.microphone_recorder.record_push_to_talk()
+            recorded_audio = (
+                await context.microphone_recorder
+                .record_push_to_talk()
+            )
         else:
-            recorded_audio = await context.microphone_recorder.record_until_silence()
+            recorded_audio = (
+                await context.microphone_recorder
+                .record_until_silence()
+            )
 
         print("Transcribing...")
 
-        result = await context.speech_to_text_provider.transcribe(
-            audio=recorded_audio.samples,
-            sample_rate=recorded_audio.sample_rate,
+        result = (
+            await context.speech_to_text_provider
+            .transcribe(
+                audio=recorded_audio.samples,
+                sample_rate=recorded_audio.sample_rate,
+            )
         )
     except SpeechRecognitionError as error:
         print(f"Voice input failed: {error}")
+        return None
+    except Exception as error:
+        print(
+            "\n[VOICE ERROR] "
+            f"{type(error).__name__}: {error}"
+        )
+        traceback.print_exc()
         return None
 
     print(f"You said: {result.text}")
@@ -192,12 +219,130 @@ async def capture_voice_command(
     return result.text
 
 
+async def process_user_command(
+    *,
+    assistant: Assistant,
+    context: ApplicationContext,
+    user_text: str,
+) -> None:
+    """Process and deliver one text or voice command."""
+
+    response = await assistant.handle_text(user_text)
+
+    await deliver_response(
+        assistant_name=assistant.name,
+        response_text=response.text,
+        speech_manager=context.speech_manager,
+    )
+
+
+async def wake_word_loop(
+    *,
+    assistant: Assistant,
+    context: ApplicationContext,
+    listener: WakeWordListener,
+    interaction_lock: asyncio.Lock,
+) -> None:
+    """Wait for wake words and process spoken commands."""
+
+    print(
+        "[WAKE] Listener started using "
+        f"{listener.provider.name}"
+    )
+
+    while not listener.is_stopped:
+        if listener.is_paused:
+            await asyncio.sleep(0.1)
+            continue
+
+        try:
+            detection = await listener.wait_for_activation()
+        except asyncio.CancelledError:
+            print("[WAKE] Listener task cancelled.")
+            raise
+        except Exception as error:
+            print(
+                "\n[WAKE ERROR] "
+                f"{type(error).__name__}: {error}"
+            )
+            traceback.print_exc()
+            return
+
+        if detection is None:
+            await asyncio.sleep(0.05)
+            continue
+
+        print(
+            "\n[WAKE] Wake word detected "
+            f"({detection.score:.2f})."
+        )
+
+        async with interaction_lock:
+            await context.speech_manager.interrupt()
+
+            await listener.pause()
+
+            try:
+                voice_text = await capture_voice_command(
+                    context
+                )
+
+                if voice_text is None:
+                    print(
+                        "[WAKE] No command was captured. "
+                        "Returning to wake-word listening."
+                    )
+                    continue
+
+                await process_user_command(
+                    assistant=assistant,
+                    context=context,
+                    user_text=voice_text,
+                )
+                await context.speech_manager.wait_until_idle()
+            finally:
+                listener.resume()
+
+
+def report_wake_task_result(
+    task: asyncio.Task[None],
+) -> None:
+    """Report unexpected termination of the wake-word task."""
+
+    if task.cancelled():
+        return
+
+    try:
+        error = task.exception()
+    except asyncio.CancelledError:
+        return
+
+    if error is not None:
+        print(
+            "\n[WAKE TASK FAILED] "
+            f"{type(error).__name__}: {error}"
+        )
+        traceback.print_exception(
+            type(error),
+            error,
+            error.__traceback__,
+        )
+        return
+
+    print(
+        "\n[WAKE TASK STOPPED] "
+        "The wake-word task ended unexpectedly."
+    )
+
+
 def print_ai_usage(
     chatbot_provider: ChatbotProvider,
 ) -> None:
     """Print OpenAI usage for this process."""
 
-    openai_provider = find_openai_provider(chatbot_provider)
+    openai_provider = find_openai_provider(
+        chatbot_provider
+    )
 
     if openai_provider is None:
         print("OpenAI is not configured.")
@@ -208,9 +353,15 @@ def print_ai_usage(
     print("OpenAI usage for this application run:")
     print(f"  Requests: {usage.request_count}")
     print(f"  Input tokens: {usage.input_tokens}")
-    print(f"  Cached input tokens: {usage.cached_input_tokens}")
+    print(
+        "  Cached input tokens: "
+        f"{usage.cached_input_tokens}"
+    )
     print(f"  Output tokens: {usage.output_tokens}")
-    print(f"  Estimated cost: ${openai_provider.estimated_total_cost_usd:.6f}")
+    print(
+        "  Estimated cost: "
+        f"${openai_provider.estimated_total_cost_usd:.6f}"
+    )
 
 
 async def consume_events(
@@ -241,10 +392,56 @@ async def consume_events(
             context.event_bus.task_done()
 
 
-async def run_application() -> None:
-    """Run the text and voice development interface."""
+async def handle_manual_voice_input(
+    *,
+    assistant: Assistant,
+    context: ApplicationContext,
+    wake_listener: WakeWordListener | None,
+    interaction_lock: asyncio.Lock,
+    manual: bool,
+) -> None:
+    """Handle a manual or silence-terminated voice request."""
 
-    assistant, timer_scheduler, context = build_application()
+    async with interaction_lock:
+        if wake_listener is not None:
+            await wake_listener.pause()
+
+        try:
+            voice_text = await capture_voice_command(
+                context,
+                manual=manual,
+            )
+
+            if voice_text is None:
+                return
+
+            await process_user_command(
+                assistant=assistant,
+                context=context,
+                user_text=voice_text,
+            )
+            await context.speech_manager.wait_until_idle()
+        finally:
+            if wake_listener is not None:
+                wake_listener.resume()
+
+
+async def run_application() -> None:
+    """Run the text, voice and wake-word interface."""
+
+    settings = load_settings()
+
+    assistant, timer_scheduler, context = (
+        build_application(settings=settings)
+    )
+
+    interaction_lock = asyncio.Lock()
+
+    wake_listener = (
+        build_wake_word_listener(settings)
+        if settings.wake_word_enabled
+        else None
+    )
 
     scheduler_task = asyncio.create_task(
         timer_scheduler.run(),
@@ -259,13 +456,50 @@ async def run_application() -> None:
         name="event-consumer",
     )
 
+    wake_word_task: asyncio.Task[None] | None = None
+
     start_message = assistant.start_message().text
 
     print(start_message)
-    print(f"Chatbot provider: {context.chatbot_provider.name}")
-    print(f"Speech provider: {context.speech_provider.name}")
-    print(f"Speech recognition: {context.speech_to_text_provider.name}")
+    print(
+        "Chatbot provider: "
+        f"{context.chatbot_provider.name}"
+    )
+    print(
+        "Speech provider: "
+        f"{context.speech_provider.name}"
+    )
+    print(
+        "Speech recognition: "
+        f"{context.speech_to_text_provider.name}"
+    )
     print("Mode: command")
+
+    microphone_description = (
+        str(settings.microphone_device)
+        if settings.microphone_device is not None
+        else "Windows default"
+    )
+
+    print(
+        "Microphone device: "
+        f"{microphone_description}"
+    )
+
+    if wake_listener is not None:
+        wake_microphone_description = (
+            str(settings.wake_word_microphone_device)
+            if settings.wake_word_microphone_device is not None
+            else microphone_description
+        )
+        print(
+            "Wake word: Hey Jarvis "
+            f"(threshold {settings.wake_word_threshold}, "
+            f"microphone {wake_microphone_description})"
+        )
+    else:
+        print("Wake-word listening is disabled.")
+
     print("Say or type 'engage AI' for conversation.")
     print("Type /voice for automatic recording.")
     print("Type /voice-manual for manual recording.")
@@ -273,6 +507,22 @@ async def run_application() -> None:
     print("Type /ai-usage to view token usage.")
 
     await context.speech_manager.speak(start_message)
+    await context.speech_manager.wait_until_idle()
+
+    if wake_listener is not None:
+        wake_word_task = asyncio.create_task(
+            wake_word_loop(
+                assistant=assistant,
+                context=context,
+                listener=wake_listener,
+                interaction_lock=interaction_lock,
+            ),
+            name="wake-word-listener",
+        )
+
+        wake_word_task.add_done_callback(
+            report_wake_task_result
+        )
 
     try:
         while True:
@@ -289,18 +539,26 @@ async def run_application() -> None:
                 break
 
             if normalized_text == "/ai-usage":
-                print_ai_usage(context.chatbot_provider)
+                print_ai_usage(
+                    context.chatbot_provider
+                )
                 continue
 
             if normalized_text == "/microphones":
                 try:
                     devices = list_input_devices()
                 except SpeechRecognitionError as error:
-                    print(f"Microphone query failed: {error}")
+                    print(
+                        "Microphone query failed: "
+                        f"{error}"
+                    )
                     continue
 
                 if not devices:
-                    print("No microphone input devices were found.")
+                    print(
+                        "No microphone input devices "
+                        "were found."
+                    )
                     continue
 
                 print("Available microphone devices:")
@@ -310,38 +568,62 @@ async def run_application() -> None:
 
                 continue
 
-            if normalized_text in {
-                "/voice",
-                "/voice-manual",
-            }:
-                voice_text = await capture_voice_command(
-                    context,
-                    manual=(normalized_text == "/voice-manual"),
+            if normalized_text == "/voice":
+                await handle_manual_voice_input(
+                    assistant=assistant,
+                    context=context,
+                    wake_listener=wake_listener,
+                    interaction_lock=interaction_lock,
+                    manual=False,
                 )
+                continue
 
-                if voice_text is None:
-                    continue
+            if normalized_text == "/voice-manual":
+                await handle_manual_voice_input(
+                    assistant=assistant,
+                    context=context,
+                    wake_listener=wake_listener,
+                    interaction_lock=interaction_lock,
+                    manual=True,
+                )
+                continue
 
-                user_text = voice_text
-            else:
+            async with interaction_lock:
                 await context.speech_manager.interrupt()
 
-            response = await assistant.handle_text(user_text)
+                if wake_listener is not None:
+                    await wake_listener.pause()
 
-            await deliver_response(
-                assistant_name=assistant.name,
-                response_text=response.text,
-                speech_manager=context.speech_manager,
-            )
+                try:
+                    await process_user_command(
+                        assistant=assistant,
+                        context=context,
+                        user_text=user_text,
+                    )
+                    await context.speech_manager.wait_until_idle()
+                finally:
+                    if wake_listener is not None:
+                        wake_listener.resume()
     finally:
+        if wake_listener is not None:
+            await wake_listener.stop()
+
         scheduler_task.cancel()
         event_consumer_task.cancel()
+
+        tasks: list[asyncio.Task[object]] = [
+            scheduler_task,
+            event_consumer_task,
+        ]
+
+        if wake_word_task is not None:
+            wake_word_task.cancel()
+            tasks.append(wake_word_task)
 
         await context.speech_manager.close()
 
         await asyncio.gather(
-            scheduler_task,
-            event_consumer_task,
+            *tasks,
             return_exceptions=True,
         )
 
